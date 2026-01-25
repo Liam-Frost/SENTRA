@@ -15,13 +15,13 @@ def test_process_autonomy_blocks_restart_and_records_event(tmp_path):
     conn = db.connect(tmp_path / "events.sqlite3")
     db.init_db(conn)
 
-    autonomy_service.set_autonomy_enabled(True, tick=1, conn=conn)
+    autonomy_service.set_autonomy_enabled(True, tick=6, conn=conn)
     autonomy_service._STATE.targets = {
-        "S1": autonomy_service.TargetState(last_action="throttle", last_action_tick=0)
+        "S1": autonomy_service.TargetState(last_action="throttle", last_action_tick=1)
     }
 
     world_state = {
-        "tick": 1,
+        "tick": 6,
         "incoming_traffic": 0,
         "servers": {
             "S1": {"temp": 90.0, "error_rate": 4.0, "health": 100, "cooling": True}

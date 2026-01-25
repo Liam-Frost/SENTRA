@@ -104,10 +104,6 @@ def process_autonomy(
                 payload={"action": decision["action"], "target": target},
                 conn=conn,
             )
-            if last_state:
-                last_state.last_action_tick = tick
-            else:
-                _STATE.targets[target] = TargetState(last_action=None, last_action_tick=tick)
             continue
 
         event_service.append_event(
