@@ -1,260 +1,284 @@
 # SENTRA
 
-### Self-Governing Autonomous Data Center Operations Platform
+## Self-Governing Autonomous Data Center Operations System
 
-SENTRA is a modular, policy-driven autonomous operations platform designed for managing and optimizing micro data center environments. It provides a full closed-loop control system that continuously monitors infrastructure conditions, detects anomalies, plans corrective actions, and executes recovery workflows without human intervention.
+SENTRA is a fully autonomous operations and resilience system for micro-scale data centers.
+It continuously monitors infrastructure health, detects anomalies, generates corrective strategies, and executes recovery actions without human intervention.
 
-The system integrates a high-fidelity tick-based simulator, a rule-governed autonomy engine, a persistent audit/event ledger, and an optional AI-based reasoning layer to enable explainable, safe, and self-correcting operations.
-
-SENTRA is designed as a reference architecture for next-generation autonomous infrastructure management systems.
-
----
-
-## Key Capabilities
-
-* **Autonomous Control Loop**
-  End-to-end closed-loop automation: monitoring → diagnosis → planning → execution → validation → correction.
-
-* **Policy-Governed Safety Layer**
-  Explicit autonomy policies and risk constraints prevent unsafe operations.
-
-* **Explainable AI Integration**
-  Optional AI layer provides structured incident analysis and remediation recommendations.
-
-* **Persistent Audit Trail**
-  All incidents, actions, and decisions are recorded in an immutable SQLite event ledger.
-
-* **Modular Architecture**
-  Clear separation between simulation, control logic, API layer, and UI enables future extensibility.
-
-* **Reproducible Demonstration Environment**
-  Deterministic simulation and scripted scenarios ensure consistent evaluation and benchmarking.
+The project addresses the challenge of building reliable, safe, and explainable AI-driven control systems in dynamic operational environments, aligned with Track 2: **AI + Automation – Fully Autonomous Solutions (“Removing the Human from the Loop”)**.
 
 ---
 
-## System Architecture
+## 1. Motivation and Problem Statement
 
-```
-+------------------+
-|  React Console   |
-+------------------+
-         |
-         v
-+------------------+
-|   Flask API      |
-+------------------+
-         |
-         v
-+------------------+
-| Autonomy Engine  |
-|  - Simulator     |
-|  - Controller    |
-|  - Policies      |
-+------------------+
-         |
-         v
-+------------------+
-| Event Ledger     |
-|  (SQLite)        |
-+------------------+
-         |
-         v
-+------------------+
-| AI Reasoning     |
-+------------------+
-```
+Modern data center operations rely heavily on manual monitoring and intervention. This model suffers from:
+
+* Limited reaction speed under failure conditions
+* High operational cost
+* Human-induced errors
+* Poor scalability in complex systems
+
+As infrastructures grow in size and complexity, manual supervision becomes increasingly ineffective.
+
+SENTRA explores an alternative paradigm: **self-governing infrastructure systems** capable of independent monitoring, decision-making, execution, and recovery.
 
 ---
 
-## Repository Structure
+## 2. Project Objectives
 
-```
-SENTRA/
-├── backend/    # Core services: simulator, autonomy engine, API, persistence
-├── frontend/   # React-based operations console
-├── docs/       # Architecture, governance, API contracts, decisions
-├── scripts/    # Development and orchestration utilities
-└── data/        # Local runtime artifacts (SQLite, caches)
-```
+The project aims to design and prototype a closed-loop autonomous control system that:
 
-### Component Overview
+1. Continuously senses system state
+2. Detects abnormal operating conditions
+3. Generates mitigation strategies
+4. Executes recovery actions autonomously
+5. Evaluates outcomes and self-corrects
+6. Records all decisions for auditability
 
-| Directory | Responsibility                                                   |
-| --------- | ---------------------------------------------------------------- |
-| backend/  | Simulation engine, control logic, API services, data persistence |
-| frontend/ | Operator console and visualization layer                         |
-| docs/     | Governance framework and system documentation                    |
-| scripts/  | Environment orchestration and automation                         |
-| data/     | Local development state                                          |
+This loop operates without human approval during normal operation.
 
 ---
 
-## Quick Start (Local Development)
+## 3. Target Scenario
+
+SENTRA operates on a simulated micro data center composed of three servers (S1, S2, S3).
+
+Each server maintains the following state variables:
+
+* Load
+* Temperature
+* Error rate
+* Power consumption
+* Health score
+* Cooling state
+
+An external traffic generator produces dynamic workload patterns.
+
+This environment enables controlled evaluation of autonomous behavior under realistic stress conditions.
+
+---
+
+## 4. System Architecture
+
+```
+React Frontend
+      ↓
+Flask API Gateway
+      ↓
+Simulation Engine
+      ↓
+Autonomy Controller
+      ↓
+Safety Validator
+      ↓
+SQLite Event Store
+      ↓
+AI Explanation Layer
+```
+
+The architecture enforces separation between perception, decision, execution, and explanation.
+
+---
+
+## 5. Autonomous Control Design
+
+### 5.1 Monitoring and Detection
+
+System state is updated at fixed intervals (tick-based simulation).
+Incidents are triggered when predefined thresholds are exceeded.
+
+### 5.2 Decision Layer
+
+A hybrid decision mechanism is adopted:
+
+* Rule-based controller ensures deterministic stability
+* AI planner provides interpretive and strategic reasoning
+
+This prevents uncontrolled behavior while retaining adaptability.
+
+### 5.3 Execution Layer
+
+Supported actions include:
+
+* Load rerouting
+* Traffic throttling
+* Cooling activation
+* Controlled restart
+
+All actions are validated by safety policies before execution.
+
+### 5.4 Self-Correction
+
+After action execution, the system reevaluates its state.
+If recovery is insufficient, escalation strategies are applied.
+
+---
+
+## 6. Safety, Ethics, and Governance
+
+SENTRA incorporates explicit governance mechanisms:
+
+* AI does not directly execute actions
+* High-risk operations are constrained
+* Rollback conditions are mandatory
+* Full decision traceability is enforced
+* Manual override remains available
+
+These mechanisms prevent autonomy from becoming loss of control.
+
+---
+
+## 7. Explainable AI Integration
+
+AI is used exclusively for:
+
+* Root cause analysis
+* Action recommendation
+* Risk assessment
+* Rollback planning
+
+Outputs follow strict structured formats to ensure interpretability.
+
+This design enables transparency in autonomous decision-making.
+
+---
+
+## 8. Technology Stack
+
+### Backend
+
+* Python 3.9+
+* Flask
+* SQLite
+* Requests
+* Pytest
+
+### Frontend
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+
+### AI
+
+* OpenAI-compatible APIs
+* JSON schema validation
+
+---
+
+## 9. Core APIs
+
+Canonical contract: `docs/03_API_CONTRACT.md`
+
+| Endpoint      | Method | Function               |
+| ------------- | ------ | ---------------------- |
+| /api/state    | GET    | Current state snapshot |
+| /api/tick     | POST   | Advance simulation     |
+| /api/events   | GET    | Event history          |
+| /api/autonomy | POST   | Toggle autonomy        |
+| /api/fault    | POST   | Inject fault           |
+| /api/reset    | POST   | Reset system           |
+
+---
+
+## 10. Experimental Setup
+
+The simulation supports:
+
+* Deterministic replay via seed control
+* Fault injection
+* Workload variability
+* Controlled escalation scenarios
+
+This enables reproducible evaluation of autonomy performance.
+
+---
+
+## 11. Documentation Governance
+
+SENTRA maintains a structured documentation system in `docs/` covering:
+
+* System context
+* Architecture
+* API contracts
+* Autonomy policy
+* Risk management
+* Decision logs
+
+This ensures continuity across AI-assisted and human development cycles.
+
+---
+
+## 12. Deployment and Execution
 
 ### Prerequisites
 
-* Python ≥ 3.9
-* Node.js ≥ 18
-* npm ≥ 9
+* Python 3.9+
+* Node.js 18+
+* npm 9+
 
----
+### Startup
 
-### Backend Services (Port 5000)
-
-From `backend/`:
-
-```bash
-python -m venv .venv
-
-# Windows
-".venv/Scripts/python.exe" -m pip install -r requirements.txt
-".venv/Scripts/python.exe" -m flask --app app.main run --port 5000
-
-# macOS/Linux
-".venv/bin/python" -m pip install -r requirements.txt
-".venv/bin/python" -m flask --app app.main run --port 5000
-```
-
----
-
-### Frontend Console (Port 5173)
-
-From `frontend/`:
-
-```bash
-npm install
-npm run dev
-```
-
-Access the console at:
+Windows:
 
 ```
-http://localhost:5173
+scripts/dev_all.ps1
 ```
 
----
-
-### One-Command Development Environment
-
-For integrated startup:
-
-* Bash: `scripts/dev_all.sh`
-* PowerShell: `scripts/dev_all.ps1`
-
-This launches backend services, initializes the database, and starts the frontend console.
-
----
-
-## Configuration and Environment Variables
-
-### Backend Configuration
-
-| Variable          | Description                                          |
-| ----------------- | ---------------------------------------------------- |
-| SENTRA_DB_PATH    | SQLite database location (default: data/dev.sqlite3) |
-| SENTRA_AI_API_URL | AI endpoint (optional)                               |
-| SENTRA_AI_API_KEY | AI authentication key (optional)                     |
-| SENTRA_AI_MODEL   | AI model identifier (optional)                       |
-
-### Frontend Configuration
-
-| Variable          | Description                   |
-| ----------------- | ----------------------------- |
-| VITE_API_BASE_URL | Backend API base URL override |
-
-All sensitive credentials must be provided via environment variables and are never committed to source control.
-
----
-
-## API Documentation
-
-Formal API specifications and usage examples are maintained in:
+macOS/Linux:
 
 ```
-docs/03_API_CONTRACT.md
+scripts/dev_all.sh
 ```
 
-The contract is treated as a source of truth for frontend-backend integration.
+Services:
+
+* Backend: [http://localhost:5000](http://localhost:5000)
+* Frontend: [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## Testing and Build
+## 13. Evaluation Criteria
 
-### Backend Validation
+SENTRA is evaluated based on:
 
-```bash
-cd backend
-
-# Windows
-".venv/Scripts/python.exe" -m pytest
-
-# macOS/Linux
-".venv/bin/python" -m pytest
-```
-
-### Frontend Build
-
-```bash
-cd frontend
-npm run build
-```
-
-The production build outputs to `frontend/dist/`.
+* Stability under sustained load
+* Recovery time after fault injection
+* Decision consistency
+* Safety policy compliance
+* Explainability of actions
+* Reproducibility
 
 ---
 
-## Governance and Operational Discipline
+## 14. Future Directions
 
-SENTRA follows a documentation-driven governance model.
+Planned extensions include:
 
-All contributors and AI agents must adhere to the following workflow:
-
-1. Review `docs/00_PROJECT_CONTEXT.md`
-2. Follow `docs/05_AUTONOMY_POLICY.md`
-3. Register tasks in `docs/07_TASK_REGISTRY.md`
-4. Log architectural decisions in `docs/08_DECISION_LOG.md`
-
-This ensures long-term maintainability and prevents uncontrolled system evolution.
+* Reinforcement learning controllers
+* Multi-node federation
+* Real telemetry integration
+* Policy-driven governance engines
+* Cloud-native deployment
 
 ---
 
-## Security and Safety Model
+## 15. License
 
-* AI components are advisory-only and cannot execute control actions.
-* All high-impact operations are governed by explicit policy rules.
-* Persistent logging enables post-incident auditing.
-* Configuration isolation prevents credential leakage.
+MIT License. See `LICENSE`.
 
 ---
 
-## Limitations and Known Constraints
+## 16. Project Contribution Summary
 
-* The simulation engine operates in-memory; multi-process deployments instantiate independent worlds.
-* SQLite is intended for development and demonstration; production deployments should migrate to distributed storage.
-* The AI layer depends on third-party service availability and latency.
+SENTRA demonstrates:
 
----
+* A complete autonomous control loop
+* Integrated safety governance
+* Explainable AI reasoning
+* Reproducible experimentation environment
+* Production-oriented system architecture
 
-## Roadmap
+The project provides a reference implementation for safe and governed autonomous infrastructure systems.
 
-Planned enhancements include:
-
-* Reinforcement learning-based controllers
-* Multi-cluster federation
-* Cloud-native deployment model
-* Distributed event ledger
-* Adaptive policy optimization
-
----
-
-## License
-
-This project is released under the MIT License.
-
----
-
-## Contact and Contributions
-
-For collaboration, research partnerships, or enterprise deployment inquiries, please contact the SENTRA development team.
-
----

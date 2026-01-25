@@ -302,7 +302,7 @@ Request body:
 
 - `enabled` is required
 - `hz` is optional; defaults to last known rate
-- `hz` must be > 0 (server clamps to max 10)
+- `hz` must be > 0 (server clamps to max 20)
 
 Response (200):
 
