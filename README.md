@@ -282,3 +282,125 @@ SENTRA demonstrates:
 
 The project provides a reference implementation for safe and governed autonomous infrastructure systems.
 
+---
+
+## Team Ownership and Responsibilities
+
+SENTRA adopts a clearly defined ownership model to ensure accountability, development efficiency, and system coherence. Each core subsystem is assigned to a primary owner responsible for its design, implementation, and maintenance.
+
+---
+
+### Liam — Project Lead / System Integration / Autonomy Design
+
+**Role:**
+Project Manager, System Architect, Frontend & Integration Lead
+
+**Primary Responsibilities:**
+
+* Overall project planning and coordination
+* System architecture and technical direction
+* Frontend dashboard development
+* API contract definition and governance
+* Simulation model refinement and optimization
+* Autonomous control policy design
+* End-to-end system integration and validation
+
+**Primary Ownership:**
+
+```
+frontend/
+docs/
+backend/app/core/simulator/ (refinement layer)
+backend/app/core/controller.py (policy design layer)
+```
+
+---
+
+### Jeff — Simulation Engine / World Modeling Lead
+
+**Role:**
+Simulation Engineer, System Dynamics Specialist
+
+**Primary Responsibilities:**
+
+* Micro data center world modeling
+* Physical and operational rule design
+* Server state evolution engine
+* Fault injection mechanisms
+* Deterministic simulation control
+* Performance and stability optimization of the simulator
+
+**Primary Ownership:**
+
+```
+backend/app/core/simulator/
+backend/app/core/simulator/world.py
+backend/app/core/simulator/rules.py
+backend/app/core/simulator/faults.py
+```
+
+---
+
+### Wilson — Backend Infrastructure / Data & AI Systems Lead
+
+**Role:**
+Backend Engineer, Data Systems Architect, AI Integration Lead
+
+**Primary Responsibilities:**
+
+* Backend service architecture
+* REST API implementation
+* Database schema and persistence layer
+* Event logging and timeline system
+* AI interface and prompt governance
+* Autonomy service orchestration
+* System reliability and data integrity
+
+**Primary Ownership:**
+
+```
+backend/app/core/ai/
+backend/app/persistence/
+backend/app/services/autonomy_service.py
+backend/app/services/event_service.py
+backend/app/web/ (infrastructure layer)
+```
+
+---
+
+### Collaboration Model
+
+SENTRA follows a vertical-slice ownership model with cross-review mechanisms:
+
+* Each subsystem has a designated primary owner
+* Architectural changes require cross-owner review
+* API and autonomy policy changes require approval from the Project Lead
+* Safety-critical components undergo multi-owner validation
+
+This governance structure ensures both development agility and system reliability.
+
+---
+
+### Responsibility Boundaries
+
+| Area                | Primary Owner | Review Required |
+| ------------------- | ------------- | --------------- |
+| System Architecture | Liam          | All members     |
+| Simulation Core     | Jeff          | Liam            |
+| Autonomy Policy     | Liam          | Wilson          |
+| Backend Services    | Wilson        | Liam            |
+| Database Layer      | Wilson        | Jeff            |
+| API Contract        | Liam          | All members     |
+| Frontend            | Liam          | All members     |
+| AI Interface        | Wilson        | Liam            |
+
+---
+
+### Maintenance and Continuity Policy
+
+To ensure project continuity:
+
+* All major changes must be documented in `docs/08_DECISION_LOG.md`
+* Ownership transfers require explicit documentation
+* Critical modules maintain updated architectural notes
+* AI-assisted contributions must comply with documentation governance rules
