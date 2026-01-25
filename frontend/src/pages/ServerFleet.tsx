@@ -4,6 +4,13 @@ import { formatPercent, formatPower, formatTemp } from "../utils/format";
 import { isIncident } from "../utils/metrics";
 
 const serverIds: ServerId[] = ["S1", "S2", "S3"];
+const statusConfig = {
+  running: { label: "Running", tone: "running" },
+  booting: { label: "Booting", tone: "booting" },
+  restarting: { label: "Restarting", tone: "booting" },
+  thermal_shutdown: { label: "Offline (thermal)", tone: "off" },
+  off: { label: "Offline", tone: "off" }
+} as const;
 
 type ServerFleetProps = {
   state: WorldState;
@@ -31,18 +38,29 @@ export default function ServerFleet({ state }: ServerFleetProps) {
       <div className="server-grid">
         {serverIds.map((id) => {
           const server = state.servers[id];
-          const incident = isIncident(server);
+          const status = server.status ?? "running";
+          const incident = status !== "thermal_shutdown" && isIncident(server);
+          const statusTone = incident
+            ? "incident"
+            : statusConfig[status as keyof typeof statusConfig]?.tone ?? "running";
+          const statusLabel = incident
+            ? "Incident"
+            : statusConfig[status as keyof typeof statusConfig]?.label ?? "Running";
+          const coolingLabel = server.cooling
+            ? `Cooling ${Math.round((server.cooling_level ?? 0) * 100)}%`
+            : "Cooling Off";
           return (
             <div className={`card server ${incident ? "incident" : ""}`} key={id}>
               <div className="server-head">
                 <div>
                   <div className="card-title">{id}</div>
                   <div className="server-status">
-                    {incident ? "Incident" : "Nominal"}
+                    <span className={`status-dot status-${statusTone}`} />
+                    <span>{statusLabel}</span>
                   </div>
                 </div>
                 <div className={`cooling ${server.cooling ? "on" : "off"}`}>
-                  Cooling {server.cooling ? "On" : "Off"}
+                  {coolingLabel}
                 </div>
               </div>
 

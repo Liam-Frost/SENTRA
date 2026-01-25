@@ -1,5 +1,12 @@
 export type ServerId = "S1" | "S2" | "S3";
 
+export type ServerStatus =
+  | "running"
+  | "booting"
+  | "restarting"
+  | "thermal_shutdown"
+  | "off";
+
 export type FaultType = "overheat" | "hardware_fail" | "network_spike";
 
 export type EventType =
@@ -10,7 +17,7 @@ export type EventType =
   | "autonomy"
   | "reset";
 
-export type MetricType = "temp" | "error_rate" | "health";
+export type MetricType = "temp" | "error_rate" | "health" | "load";
 
 export type ActionType =
   | "reroute"
@@ -26,6 +33,8 @@ export interface ServerState {
   power: number;
   health: number;
   cooling: boolean;
+  cooling_level: number;
+  status: ServerStatus;
 }
 
 export interface WorldState {
@@ -45,6 +54,7 @@ export interface IncidentPayload {
   metric: MetricType;
   value: number;
   threshold: number;
+  status?: "start" | "resolved";
 }
 
 export interface ActionPayload {

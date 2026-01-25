@@ -94,6 +94,25 @@ def post_reset():
     return jsonify(tick_service.reset(reset_events=reset_events))
 
 
+@bp.get("/realtime")
+def get_realtime():
+    return jsonify(tick_service.get_realtime_state())
+
+
+@bp.post("/realtime")
+def post_realtime():
+    body = request.get_json(silent=True) or {}
+    if "enabled" not in body or not isinstance(body.get("enabled"), bool):
+        return _bad_request("enabled must be boolean")
+    hz = body.get("hz")
+    if hz is not None and not isinstance(hz, (int, float)):
+        return _bad_request("hz must be a number")
+    try:
+        return jsonify(tick_service.set_realtime(body["enabled"], hz=hz))
+    except ValueError as exc:
+        return _bad_request(str(exc))
+
+
 def _bad_request(message: str):
     return jsonify({"error": {"code": "BAD_REQUEST", "message": message}}), 400
 

@@ -19,9 +19,19 @@ Base path: `/api`
   "error_rate": 0.0,
   "power": 0.0,
   "health": 100,
-  "cooling": false
+  "cooling": true,
+  "cooling_level": 0.0,
+  "status": "booting"
 }
 ```
+
+Status values:
+
+- `booting`
+- `running`
+- `restarting`
+- `thermal_shutdown`
+- `off`
 
 ### WorldState
 
@@ -30,9 +40,9 @@ Base path: `/api`
   "tick": 0,
   "incoming_traffic": 0,
   "servers": {
-    "S1": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": false},
-    "S2": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": false},
-    "S3": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": false}
+    "S1": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"},
+    "S2": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"},
+    "S3": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"}
   },
   "autonomy_enabled": false
 }
@@ -80,7 +90,8 @@ Payload shapes (required per type):
   "target": "S2",
   "metric": "temp",
   "value": 83.4,
-  "threshold": 80
+  "threshold": 80,
+  "status": "start"
 }
 
 // action
@@ -112,7 +123,7 @@ Notes:
 
 - `target` is required for `fault` and `incident` events.
 - `target` is optional for `action` events (some actions may be global).
-- `metric` must be one of: `temp`, `error_rate`, `health`.
+- `metric` must be one of: `temp`, `error_rate`, `health`, `load`.
 - `action` must be one of: `reroute`, `throttle`, `enableCooling`, `disableCooling`, `restart`.
 - If the service needs a new event type, this document must be updated first.
 
@@ -258,6 +269,49 @@ Request body:
   event is appended
 
 Response (200): `WorldState`
+
+---
+
+## GET /api/realtime
+
+Purpose: return realtime tick loop status.
+
+Response (200):
+
+```json
+{
+  "enabled": false,
+  "hz": 1
+}
+```
+
+---
+
+## POST /api/realtime
+
+Purpose: enable/disable realtime tick loop.
+
+Request body:
+
+```json
+{
+  "enabled": true,
+  "hz": 1
+}
+```
+
+- `enabled` is required
+- `hz` is optional; defaults to last known rate
+- `hz` must be > 0 (server clamps to max 10)
+
+Response (200):
+
+```json
+{
+  "enabled": true,
+  "hz": 1
+}
+```
 
 ---
 

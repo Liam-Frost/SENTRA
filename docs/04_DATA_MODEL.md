@@ -10,14 +10,16 @@ Source of truth: `docs/00_PROJECT_CONTEXT.md`.
 
 ### ServerState
 
-| Field      | Type  | Range      | Notes |
-| ---------- | ----- | ---------- | ----- |
-| load       | float | 0-100      | CPU/traffic load |
-| temp       | float | C          | Temperature |
-| error_rate | float | %          | Failure rate |
-| power      | float | Watts      | Power consumption |
-| health     | int   | 0-100      | Health score |
-| cooling    | bool  | true/false | Cooling enabled |
+| Field         | Type  | Range      | Notes |
+| ------------- | ----- | ---------- | ----- |
+| load          | float | 0-100      | CPU/traffic load |
+| temp          | float | C          | Temperature |
+| error_rate    | float | %          | Failure rate |
+| power         | float | Watts      | Power consumption |
+| health        | int   | 0-100      | Health score |
+| cooling       | bool  | true/false | Cooling enabled |
+| cooling_level | float | 0-1        | Cooling intensity (0-100%) |
+| status        | str   | enum       | booting, running, restarting, thermal_shutdown, off |
 
 ### WorldState
 
@@ -28,9 +30,9 @@ Minimum recommended JSON shape:
   "tick": 0,
   "incoming_traffic": 0,
   "servers": {
-    "S1": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": false},
-    "S2": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": false},
-    "S3": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": false}
+    "S1": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"},
+    "S2": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"},
+    "S3": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"}
   },
   "autonomy_enabled": false
 }
@@ -58,6 +60,7 @@ Incident trigger conditions:
 temp > 80
 OR error_rate > 5%
 OR health < 60
+OR load > 85
 ```
 
 ---

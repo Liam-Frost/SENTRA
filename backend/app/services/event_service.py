@@ -15,7 +15,7 @@ ALLOWED_ACTIONS = {
     "disableCooling",
     "restart",
 }
-ALLOWED_INCIDENT_METRICS = {"temp", "error_rate", "health"}
+ALLOWED_INCIDENT_METRICS = {"temp", "error_rate", "health", "load"}
 
 
 def append_event(

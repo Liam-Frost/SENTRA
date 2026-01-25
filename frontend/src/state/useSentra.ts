@@ -2,15 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EventRecord, FaultType, ServerId, WorldState } from "../types";
 import {
   getEvents,
+  getRealtime,
   getState,
   injectFault,
   resetWorld,
   setAutonomy,
+  setRealtime,
   tick
 } from "../api/sentra";
+import type { RealtimeState } from "../api/sentra";
 
 const STATE_POLL_MS = 1500;
 const EVENTS_POLL_MS = 2500;
+const REALTIME_POLL_MS = 3000;
 const EVENT_BUFFER_LIMIT = 500;
 
 function useMountedRef() {
@@ -31,11 +35,13 @@ type UseSentraResult = {
   error: string | null;
   busy: boolean;
   lastUpdated: Date | null;
+  realtime: RealtimeState;
   refresh: () => Promise<void>;
   advanceTick: (steps?: number) => Promise<void>;
   toggleAutonomy: (enabled: boolean) => Promise<void>;
   injectFault: (type: FaultType, target: ServerId) => Promise<void>;
   reset: (resetEvents: boolean) => Promise<void>;
+  setRealtime: (enabled: boolean, hz?: number) => Promise<void>;
 };
 
 function mergeEvents(existing: EventRecord[], incoming: EventRecord[]) {
@@ -58,6 +64,10 @@ export function useSentra(): UseSentraResult {
   const [state, setState] = useState<WorldState | null>(null);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const maxEventIdRef = useRef(0);
+  const [realtime, setRealtimeState] = useState<RealtimeState>({
+    enabled: false,
+    hz: 1
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,14 +107,6 @@ export function useSentra(): UseSentraResult {
     }
   }, [mounted]);
 
-  const refresh = useCallback(async () => {
-    await Promise.all([refreshState(), refreshEvents()]);
-  }, [refreshEvents, refreshState]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
   useEffect(() => {
     const interval = window.setInterval(refreshState, STATE_POLL_MS);
     return () => window.clearInterval(interval);
@@ -114,6 +116,29 @@ export function useSentra(): UseSentraResult {
     const interval = window.setInterval(refreshEvents, EVENTS_POLL_MS);
     return () => window.clearInterval(interval);
   }, [refreshEvents]);
+
+  const refreshRealtime = useCallback(async () => {
+    try {
+      const data = await getRealtime();
+      if (!mounted.current) return;
+      setRealtimeState(data);
+    } catch {
+      if (!mounted.current) return;
+    }
+  }, [mounted]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshState(), refreshEvents(), refreshRealtime()]);
+  }, [refreshEvents, refreshRealtime, refreshState]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const interval = window.setInterval(refreshRealtime, REALTIME_POLL_MS);
+    return () => window.clearInterval(interval);
+  }, [refreshRealtime]);
 
   const runAction = useCallback(
     async (action: () => Promise<void>) => {
@@ -177,6 +202,16 @@ export function useSentra(): UseSentraResult {
     [refreshEvents, runAction]
   );
 
+  const setRealtimeMode = useCallback(
+    async (enabled: boolean, hz?: number) => {
+      await runAction(async () => {
+        const data = await setRealtime(enabled, hz);
+        setRealtimeState(data);
+      });
+    },
+    [runAction]
+  );
+
   const result = useMemo(
     () => ({
       state,
@@ -185,11 +220,13 @@ export function useSentra(): UseSentraResult {
       error,
       busy,
       lastUpdated,
+      realtime,
       refresh,
       advanceTick,
       toggleAutonomy,
       injectFault: injectFaultAction,
-      reset
+      reset,
+      setRealtime: setRealtimeMode
     }),
     [
       advanceTick,
@@ -199,8 +236,10 @@ export function useSentra(): UseSentraResult {
       injectFaultAction,
       lastUpdated,
       loading,
+      realtime,
       refresh,
       reset,
+      setRealtimeMode,
       state,
       toggleAutonomy
     ]

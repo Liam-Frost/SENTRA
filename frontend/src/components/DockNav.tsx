@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import ThemeToggle, { type ThemeMode } from "./ThemeToggle";
 
-export type RouteKey = "dashboard" | "fleet" | "control" | "events";
+export type RouteKey = "dashboard" | "fleet" | "events";
 
 type DockNavProps = {
   active: RouteKey;
   onNavigate: (route: RouteKey) => void;
+  toolsOpen: boolean;
+  onToggleTools: () => void;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
 };
@@ -37,17 +39,14 @@ const items: { key: RouteKey; label: string; icon: JSX.Element }[] = [
         <path d="M4 4h16v6H4V4zm0 10h16v6H4v-6zm3-7h3v2H7V7zm0 10h3v2H7v-2z" />
       </svg>
     )
-  },
-  {
-    key: "control",
-    label: "Control deck",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 7h16M4 17h16M9 7v10M15 7v10" />
-      </svg>
-    )
   }
 ];
+
+const toolsIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 7h16M4 17h16M9 7v10M15 7v10" />
+  </svg>
+);
 
 const timeFormatter = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
@@ -62,6 +61,8 @@ function formatTime(date: Date) {
 export default function DockNav({
   active,
   onNavigate,
+  toolsOpen,
+  onToggleTools,
   themeMode,
   onThemeModeChange
 }: DockNavProps) {
@@ -92,6 +93,20 @@ export default function DockNav({
             <span className="dock-label">{item.label}</span>
           </button>
         ))}
+
+        <button
+          type="button"
+          className={`dock-item ${toolsOpen ? "active" : ""}`}
+          onClick={onToggleTools}
+          aria-label={toolsOpen ? "Close tools" : "Open tools"}
+          aria-pressed={toolsOpen}
+        >
+          <span className="dock-icon" aria-hidden="true">
+            {toolsIcon}
+          </span>
+          <span className="dock-label">{toolsOpen ? "Close tools" : "Open tools"}</span>
+        </button>
+
         <ThemeToggle mode={themeMode} onModeChange={onThemeModeChange} />
       </div>
       <div className="dock-divider" role="presentation" />

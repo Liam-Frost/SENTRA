@@ -6,18 +6,29 @@ INCIDENT_THRESHOLDS = {
     "temp": 80.0,
     "error_rate": 5.0,
     "health": 60.0,
+    "load": 85.0,
 }
 
 ACTION_PRIORITY = ["enableCooling", "reroute", "throttle", "restart"]
+ACTION_PRIORITY_BY_METRIC = {
+    "temp": ["enableCooling", "throttle", "restart", "reroute"],
+    "error_rate": ["restart", "enableCooling", "reroute", "throttle"],
+    "health": ["restart", "throttle", "enableCooling", "reroute"],
+    "load": ["reroute", "throttle", "enableCooling"],
+}
 
 
 def detect_incidents(world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
     incidents: List[Dict[str, Any]] = []
     servers = (world_state or {}).get("servers", {})
     for target, state in servers.items():
+        status = str(state.get("status") or "running")
+        if status in {"booting", "restarting", "thermal_shutdown", "off"}:
+            continue
         temp = _as_number(state.get("temp"), 0.0)
         error_rate = _as_number(state.get("error_rate"), 0.0)
         health = _as_number(state.get("health"), 100.0)
+        load = _as_number(state.get("load"), 0.0)
 
         if temp > INCIDENT_THRESHOLDS["temp"]:
             incidents.append(
@@ -49,6 +60,16 @@ def detect_incidents(world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "message": f"health < 60 on {target}",
                 }
             )
+        if load > INCIDENT_THRESHOLDS["load"]:
+            incidents.append(
+                {
+                    "target": target,
+                    "metric": "load",
+                    "value": load,
+                    "threshold": INCIDENT_THRESHOLDS["load"],
+                    "message": f"load > 85 on {target}",
+                }
+            )
     return incidents
 
 
@@ -59,12 +80,17 @@ def select_action(
 ) -> Optional[Dict[str, Any]]:
     target = incident.get("target")
     server_state = (world_state or {}).get("servers", {}).get(target, {})
+    if server_state.get("status") not in (None, "running"):
+        return None
+
+    metric = str(incident.get("metric") or "")
+    priority = ACTION_PRIORITY_BY_METRIC.get(metric, ACTION_PRIORITY)
 
     start_index = 0
-    if last_action in ACTION_PRIORITY:
-        start_index = ACTION_PRIORITY.index(last_action) + 1
+    if last_action in priority and last_action != priority[-1]:
+        start_index = priority.index(last_action) + 1
 
-    for action in ACTION_PRIORITY[start_index:]:
+    for action in priority[start_index:]:
         decision = _evaluate_action(action, server_state, world_state, target)
         if decision is not None:
             return decision

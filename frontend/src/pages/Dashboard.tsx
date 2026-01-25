@@ -11,7 +11,7 @@ type DashboardProps = {
   state: WorldState;
   events: EventRecord[];
   incidentCount: number;
-  onOpenEvents: () => void;
+  onOpenEvents: (eventId?: number) => void;
 };
 
 export default function Dashboard({
@@ -217,11 +217,19 @@ export default function Dashboard({
             <AnimatedList
               items={recentEvents}
               getKey={(event) => event.id}
-              renderItem={(event) => <EventCard event={event} variant="compact" />}
+              renderItem={(event) => (
+                <button
+                  type="button"
+                  className="event-link"
+                  onClick={() => onOpenEvents(event.id)}
+                >
+                  <EventCard event={event} variant="compact" />
+                </button>
+              )}
               itemClassName="event-compact-wrapper"
             />
           )}
-          <button type="button" className="button outline" onClick={onOpenEvents}>
+          <button type="button" className="button outline" onClick={() => onOpenEvents()}>
             View full timeline
           </button>
         </div>

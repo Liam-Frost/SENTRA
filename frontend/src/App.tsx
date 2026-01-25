@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import DockNav, { type RouteKey } from "./components/DockNav";
+import ControlDrawer from "./components/ControlDrawer";
 import NotificationTray, { type NotificationItem } from "./components/NotificationTray";
 import type { ServerState, WorldState } from "./types";
 import { useSentra } from "./state/useSentra";
 import Dashboard from "./pages/Dashboard";
 import ServerFleet from "./pages/ServerFleet";
-import ControlDeck from "./pages/ControlDeck";
 import EventTimeline from "./pages/EventTimeline";
 import { isIncident } from "./utils/metrics";
 import type { ThemeMode } from "./components/ThemeToggle";
@@ -19,7 +19,9 @@ const defaultServer: ServerState = {
   error_rate: 0,
   power: 0,
   health: 100,
-  cooling: false
+  cooling: false,
+  cooling_level: 0,
+  status: "booting"
 };
 
 const fallbackState: WorldState = {
@@ -33,11 +35,12 @@ const fallbackState: WorldState = {
   }
 };
 
-const routes: RouteKey[] = ["dashboard", "fleet", "control", "events"];
+const routes: RouteKey[] = ["dashboard", "fleet", "events"];
 
 function parseRoute(): RouteKey {
   const raw = window.location.hash.replace("#/", "").replace("#", "");
-  if (routes.includes(raw as RouteKey)) return raw as RouteKey;
+  const routeKey = raw.split("?")[0];
+  if (routes.includes(routeKey as RouteKey)) return routeKey as RouteKey;
   return "dashboard";
 }
 
@@ -75,10 +78,12 @@ export default function App() {
     error,
     busy,
     lastUpdated,
+    realtime,
     advanceTick,
     toggleAutonomy,
     injectFault,
-    reset
+    reset,
+    setRealtime
   } = useSentra();
 
   const displayState = state ?? fallbackState;
@@ -87,6 +92,7 @@ export default function App() {
   }, [displayState.servers]);
 
   const { route, navigate } = useHashRoute();
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
     return stored ?? "system";
@@ -101,6 +107,20 @@ export default function App() {
     if (!window.location.hash) {
       window.location.hash = "/dashboard";
     }
+  }, []);
+
+  useEffect(() => {
+    const handleControlRoute = () => {
+      const raw = window.location.hash.replace("#/", "").replace("#", "");
+      const base = raw.split("?")[0];
+      if (base !== "control") return;
+      setToolsOpen(true);
+      window.location.hash = "/dashboard";
+    };
+
+    handleControlRoute();
+    window.addEventListener("hashchange", handleControlRoute);
+    return () => window.removeEventListener("hashchange", handleControlRoute);
   }, []);
 
   useEffect(() => {
@@ -172,6 +192,16 @@ export default function App() {
   }, []);
 
   const connectionLabel = loading ? "Connecting" : error ? "Degraded" : "Live";
+  const handleReset = async (resetEvents: boolean) => {
+    await reset(resetEvents);
+    setNotifications([]);
+    if (resetEvents) {
+      lastIncidentIdRef.current = 0;
+      return;
+    }
+    const maxId = events.length > 0 ? Math.max(...events.map((event) => event.id)) : 0;
+    lastIncidentIdRef.current = maxId;
+  };
 
   return (
     <div className="app-shell">
@@ -218,26 +248,37 @@ export default function App() {
             state={displayState}
             events={events}
             incidentCount={incidentCount}
-            onOpenEvents={() => navigate("events")}
+            onOpenEvents={(eventId) => {
+              if (eventId) {
+                window.location.hash = `/events?event=${eventId}`;
+                return;
+              }
+              navigate("events");
+            }}
           />
         )}
         {route === "fleet" && <ServerFleet state={displayState} />}
-        {route === "control" && (
-          <ControlDeck
-            state={displayState}
-            busy={busy}
-            onAdvanceTick={advanceTick}
-            onToggleAutonomy={toggleAutonomy}
-            onInjectFault={injectFault}
-            onReset={reset}
-          />
-        )}
         {route === "events" && <EventTimeline events={events} />}
       </main>
+
+      <ControlDrawer
+        open={toolsOpen}
+        onClose={() => setToolsOpen(false)}
+        state={displayState}
+        busy={busy}
+        realtime={realtime}
+        onAdvanceTick={advanceTick}
+        onToggleAutonomy={toggleAutonomy}
+        onInjectFault={injectFault}
+        onReset={handleReset}
+        onSetRealtime={setRealtime}
+      />
 
       <DockNav
         active={route}
         onNavigate={navigate}
+        toolsOpen={toolsOpen}
+        onToggleTools={() => setToolsOpen((current) => !current)}
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
       />
@@ -249,6 +290,11 @@ export default function App() {
             current.filter((entry) => entry.id !== item.id)
           );
           navigate("events");
+        }}
+        onDismiss={(item) => {
+          setNotifications((current) =>
+            current.filter((entry) => entry.id !== item.id)
+          );
         }}
       />
     </div>

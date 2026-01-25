@@ -23,6 +23,16 @@ type ResetRequest = {
   reset_events?: boolean;
 };
 
+export type RealtimeState = {
+  enabled: boolean;
+  hz: number;
+};
+
+type RealtimeRequest = {
+  enabled: boolean;
+  hz?: number;
+};
+
 export async function getState(): Promise<WorldState> {
   return request<WorldState>("/api/state");
 }
@@ -73,6 +83,21 @@ export async function setAutonomy(enabled: boolean): Promise<{ enabled: boolean 
 export async function resetWorld(resetEvents = true): Promise<WorldState> {
   const body: ResetRequest = { reset_events: resetEvents };
   return request<WorldState>("/api/reset", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function getRealtime(): Promise<RealtimeState> {
+  return request<RealtimeState>("/api/realtime");
+}
+
+export async function setRealtime(
+  enabled: boolean,
+  hz?: number
+): Promise<RealtimeState> {
+  const body: RealtimeRequest = hz !== undefined ? { enabled, hz } : { enabled };
+  return request<RealtimeState>("/api/realtime", {
     method: "POST",
     body: JSON.stringify(body)
   });

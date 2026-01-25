@@ -1,7 +1,14 @@
 import type { ServerState, WorldState } from "../types";
 
 export function isIncident(server: ServerState) {
-  return server.temp > 80 || server.error_rate > 5 || server.health < 60;
+  if (server.status === "thermal_shutdown") return true;
+  if (server.status !== "running") return false;
+  return (
+    server.temp > 80 ||
+    server.error_rate > 5 ||
+    server.health < 60 ||
+    server.load > 85
+  );
 }
 
 export function getFleetStats(state: WorldState) {
