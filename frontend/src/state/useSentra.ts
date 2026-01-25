@@ -57,6 +57,7 @@ export function useSentra(): UseSentraResult {
   const mounted = useMountedRef();
   const [state, setState] = useState<WorldState | null>(null);
   const [events, setEvents] = useState<EventRecord[]>([]);
+  const maxEventIdRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -80,10 +81,14 @@ export function useSentra(): UseSentraResult {
 
   const refreshEvents = useCallback(async () => {
     try {
-      // Use limit only; merge handles dedup. sinceTick is best-effort optimization.
-      const data = await getEvents({ limit: 200 });
+      const afterId = maxEventIdRef.current > 0 ? maxEventIdRef.current : undefined;
+      const data = await getEvents({ limit: 200, afterId });
       if (!mounted.current) return;
-      setEvents((current) => mergeEvents(current, data.events));
+      setEvents((current) => {
+        const merged = mergeEvents(current, data.events);
+        maxEventIdRef.current = merged.length > 0 ? merged[merged.length - 1].id : 0;
+        return merged;
+      });
       setError(null);
     } catch (err) {
       if (!mounted.current) return;
@@ -163,6 +168,7 @@ export function useSentra(): UseSentraResult {
         setState(data);
         if (resetEvents) {
           setEvents([]);
+          maxEventIdRef.current = 0;
           return;
         }
         await refreshEvents();

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import threading
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from app.core import controller
@@ -24,25 +25,28 @@ class AutonomyState:
 
 
 _STATE = AutonomyState()
+_STATE_LOCK = threading.RLock()
 
 
 def set_autonomy_enabled(enabled: bool, tick: Optional[int] = None, conn: Any = None) -> bool:
-    _STATE.enabled = bool(enabled)
-    if not _STATE.enabled:
-        _STATE.targets.clear()
-        _STATE.last_tick_processed = None
-    event_service.append_event(
-        tick=_safe_tick(tick),
-        event_type="autonomy",
-        message=f"autonomy {'enabled' if enabled else 'disabled'}",
-        payload={"enabled": bool(enabled)},
-        conn=conn,
-    )
-    return _STATE.enabled
+    with _STATE_LOCK:
+        _STATE.enabled = bool(enabled)
+        if not _STATE.enabled:
+            _STATE.targets.clear()
+            _STATE.last_tick_processed = None
+        event_service.append_event(
+            tick=_safe_tick(tick),
+            event_type="autonomy",
+            message=f"autonomy {'enabled' if enabled else 'disabled'}",
+            payload={"enabled": bool(enabled)},
+            conn=conn,
+        )
+        return _STATE.enabled
 
 
 def is_autonomy_enabled() -> bool:
-    return _STATE.enabled
+    with _STATE_LOCK:
+        return _STATE.enabled
 
 
 def process_autonomy(
@@ -51,102 +55,104 @@ def process_autonomy(
     ai_explainer_fn: Optional[Callable[[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]], Dict[str, Any]]] = None,
     conn: Any = None,
 ) -> Dict[str, Any]:
-    if not _STATE.enabled:
-        return world_state
-
-    tick = _safe_tick(world_state.get("tick"))
-    if _STATE.last_tick_processed is not None:
-        if tick < _STATE.last_tick_processed:
-            _STATE.targets.clear()
-            _STATE.last_tick_processed = None
-        elif tick == _STATE.last_tick_processed:
+    with _STATE_LOCK:
+        if not _STATE.enabled:
             return world_state
-    incidents = controller.detect_incidents(world_state)
 
-    for incident in incidents:
-        event_service.append_event(
-            tick=tick,
-            event_type="incident",
-            message=incident["message"],
-            payload={
-                "target": incident["target"],
-                "metric": incident["metric"],
-                "value": incident["value"],
-                "threshold": incident["threshold"],
-            },
-            conn=conn,
-        )
+        tick = _safe_tick(world_state.get("tick"))
+        if _STATE.last_tick_processed is not None:
+            if tick < _STATE.last_tick_processed:
+                _STATE.targets.clear()
+                _STATE.last_tick_processed = None
+            elif tick == _STATE.last_tick_processed:
+                return world_state
 
-    active_targets = {incident["target"] for incident in incidents}
-    _clear_inactive_targets(active_targets)
+        incidents = controller.detect_incidents(world_state)
 
-    decisions: List[Dict[str, Any]] = []
-    for target, incident in _group_incidents_by_target(incidents).items():
-        last_state = _STATE.targets.get(target)
-        if last_state and last_state.last_action_tick is not None:
-            if tick - last_state.last_action_tick < WAIT_TICKS:
+        for incident in incidents:
+            event_service.append_event(
+                tick=tick,
+                event_type="incident",
+                message=incident["message"],
+                payload={
+                    "target": incident["target"],
+                    "metric": incident["metric"],
+                    "value": incident["value"],
+                    "threshold": incident["threshold"],
+                },
+                conn=conn,
+            )
+
+        active_targets = {incident["target"] for incident in incidents}
+        _clear_inactive_targets(active_targets)
+
+        decisions: List[Dict[str, Any]] = []
+        for target, incident in _group_incidents_by_target(incidents).items():
+            last_state = _STATE.targets.get(target)
+            if last_state and last_state.last_action_tick is not None:
+                if tick - last_state.last_action_tick < WAIT_TICKS:
+                    continue
+
+            decision = controller.select_action(
+                world_state=world_state,
+                incident=incident,
+                last_action=last_state.last_action if last_state else None,
+            )
+            if decision is None:
+                continue
+            decisions.append(decision)
+
+            if decision["blocked"]:
+                event_service.append_event(
+                    tick=tick,
+                    event_type="action",
+                    message=f"blocked {decision['action']} on {target}: {decision['reason']}",
+                    payload={"action": decision["action"], "target": target},
+                    conn=conn,
+                )
                 continue
 
-        decision = controller.select_action(
-            world_state=world_state,
-            incident=incident,
-            last_action=last_state.last_action if last_state else None,
-        )
-        if decision is None:
-            continue
-        decisions.append(decision)
-
-        if decision["blocked"]:
             event_service.append_event(
                 tick=tick,
                 event_type="action",
-                message=f"blocked {decision['action']} on {target}: {decision['reason']}",
+                message=f"decide {decision['action']} on {target}",
                 payload={"action": decision["action"], "target": target},
                 conn=conn,
             )
-            continue
 
-        event_service.append_event(
-            tick=tick,
-            event_type="action",
-            message=f"decide {decision['action']} on {target}",
-            payload={"action": decision["action"], "target": target},
-            conn=conn,
-        )
+            world_state = _execute_action(
+                world_state,
+                decision["action"],
+                target,
+                execute_action_fn,
+            )
 
-        world_state = _execute_action(
-            world_state,
-            decision["action"],
-            target,
-            execute_action_fn,
-        )
+            event_service.append_event(
+                tick=tick,
+                event_type="action",
+                message=f"execute {decision['action']} on {target}",
+                payload={"action": decision["action"], "target": target},
+                conn=conn,
+            )
 
-        event_service.append_event(
-            tick=tick,
-            event_type="action",
-            message=f"execute {decision['action']} on {target}",
-            payload={"action": decision["action"], "target": target},
-            conn=conn,
-        )
+            _STATE.targets[target] = TargetState(
+                last_action=decision["action"],
+                last_action_tick=tick,
+            )
 
-        _STATE.targets[target] = TargetState(
-            last_action=decision["action"],
-            last_action_tick=tick,
-        )
+        if incidents:
+            explainer = ai_explainer_fn or ai_client.explain_incidents
+            ai_payload = explainer(world_state, incidents, decisions)
+            event_service.append_event(
+                tick=tick,
+                event_type="ai",
+                message="ai explanation",
+                payload=ai_payload,
+                conn=conn,
+            )
 
-    if incidents:
-        explainer = ai_explainer_fn or ai_client.explain_incidents
-        ai_payload = explainer(world_state, incidents, decisions)
-        event_service.append_event(
-            tick=tick,
-            event_type="ai",
-            message="ai explanation",
-            payload=ai_payload,
-            conn=conn,
-        )
-
-    _STATE.last_tick_processed = tick
-    return world_state
+        _STATE.last_tick_processed = tick
+        return world_state
 
 
 def on_tick(

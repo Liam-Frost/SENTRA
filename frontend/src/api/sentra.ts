@@ -45,6 +45,7 @@ export async function injectFault(payload: FaultRequest): Promise<{ ok: boolean 
 type EventsQuery = {
   limit?: number;
   sinceTick?: number;
+  afterId?: number;
   type?: string[];
   target?: string[];
 };
@@ -53,6 +54,7 @@ export async function getEvents(params: EventsQuery = {}): Promise<EventsRespons
   const query = new URLSearchParams();
   if (params.limit !== undefined) query.set("limit", String(params.limit));
   if (params.sinceTick !== undefined) query.set("since_tick", String(params.sinceTick));
+  if (params.afterId !== undefined) query.set("after_id", String(params.afterId));
   if (params.type && params.type.length > 0) query.set("type", params.type.join(","));
   if (params.target && params.target.length > 0) query.set("target", params.target.join(","));
 

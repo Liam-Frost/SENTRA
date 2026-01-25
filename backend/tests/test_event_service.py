@@ -110,3 +110,39 @@ def test_list_events_filters(tmp_path):
 
     target_events = event_service.list_events(targets=["S2"], conn=conn)["events"]
     assert len(target_events) == 2
+
+
+def test_list_events_limit_returns_latest(tmp_path):
+    conn = db.connect(tmp_path / "events.sqlite3")
+    db.init_db(conn)
+
+    for tick in range(5):
+        event_service.append_event(
+            tick=tick,
+            event_type="reset",
+            message=f"reset {tick}",
+            payload={"reset_events": False},
+            conn=conn,
+        )
+
+    events = event_service.list_events(limit=2, conn=conn)["events"]
+    ids = [event["id"] for event in events]
+    assert ids == [4, 5]
+
+
+def test_list_events_after_id(tmp_path):
+    conn = db.connect(tmp_path / "events.sqlite3")
+    db.init_db(conn)
+
+    for tick in range(5):
+        event_service.append_event(
+            tick=tick,
+            event_type="reset",
+            message=f"reset {tick}",
+            payload={"reset_events": False},
+            conn=conn,
+        )
+
+    events = event_service.list_events(after_id=3, conn=conn)["events"]
+    ids = [event["id"] for event in events]
+    assert ids == [4, 5]

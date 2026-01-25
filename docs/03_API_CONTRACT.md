@@ -181,6 +181,7 @@ Optional query parameters (recommended):
 
 - `limit` (int)
 - `since_tick` (int)
+- `after_id` (int)
 - `type` (comma-separated list of event types)
 - `target` (comma-separated list of server ids)
 
@@ -196,7 +197,14 @@ Filtering rules:
 - `type` filters by EventRecord `type`.
 - `target` filters by EventRecord `payload.target`.
 - `since_tick` is inclusive.
+- `after_id` filters by EventRecord `id` (exclusive).
 - If multiple filters are provided, they are combined with AND.
+
+Ordering and pagination:
+
+- If `after_id` is provided, the server returns events with `id > after_id`.
+- If `after_id` is omitted and `limit` is provided, the server returns the most recent `limit` events.
+- The response is always ordered by `id` ascending.
 
 Response (200):
 

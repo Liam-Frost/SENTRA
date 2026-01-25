@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set
 
 from app.persistence import db
@@ -67,6 +67,7 @@ def append_event(
 def list_events(
     limit: Optional[int] = None,
     since_tick: Optional[int] = None,
+    after_id: Optional[int] = None,
     types: Optional[Iterable[str]] = None,
     targets: Optional[Iterable[str]] = None,
     conn: Optional[Any] = None,
@@ -87,6 +88,9 @@ def list_events(
     if since_tick is not None:
         conditions.append("tick >= ?")
         params.append(int(since_tick))
+    if after_id is not None:
+        conditions.append("id > ?")
+        params.append(int(after_id))
     if type_list:
         placeholders = ",".join(["?"] * len(type_list))
         conditions.append(f"type IN ({placeholders})")
@@ -94,12 +98,18 @@ def list_events(
 
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
-    sql += " ORDER BY id ASC"
 
-    rows = conn.execute(sql, params).fetchall()
+    query_order = "ASC"
+    if limit is not None and after_id is None:
+        # Without an anchor, default to returning the most recent N events.
+        # We still return events in ascending order to preserve timeline rendering.
+        query_order = "DESC"
+    sql += f" ORDER BY id {query_order}"
+
+    cursor = conn.execute(sql, params)
 
     events: List[Dict[str, Any]] = []
-    for row in rows:
+    for row in cursor:
         event = _row_to_event(row)
         if target_list:
             payload_target = None
@@ -111,6 +121,9 @@ def list_events(
         events.append(event)
         if limit is not None and len(events) >= limit:
             break
+
+    if query_order == "DESC":
+        events.reverse()
 
     if close_conn:
         conn.close()
@@ -248,4 +261,9 @@ def _require_list_of_str(payload: Dict[str, Any], key: str) -> None:
 
 
 def _iso_now() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
