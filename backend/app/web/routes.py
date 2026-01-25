@@ -8,7 +8,7 @@ from app.services import autonomy_service, event_service, tick_service
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
-
+#if teammate B upload their function, update any about tick_service helper function here
 @bp.get("/state")
 def get_state():
     return jsonify(tick_service.get_state())
@@ -31,7 +31,7 @@ def post_fault():
     if not isinstance(fault_type, str) or not isinstance(target, str):
         return _bad_request("type and target are required")
     try:
-        tick_service.inject_fault(fault_type, target)
+        tick_service.inject_fault(fault_type, target)   #if teammate B update inject_fault, renew condition here
     except ValueError as exc:
         return _bad_request(str(exc))
     return jsonify({"ok": True})
