@@ -61,7 +61,6 @@ export function useSentra(): UseSentraResult {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const lastEventIdRef = useRef<number | undefined>(undefined);
 
   const refreshState = useCallback(async () => {
     try {
@@ -84,12 +83,7 @@ export function useSentra(): UseSentraResult {
       // Use limit only; merge handles dedup. sinceTick is best-effort optimization.
       const data = await getEvents({ limit: 200 });
       if (!mounted.current) return;
-      setEvents((current) => {
-        const merged = mergeEvents(current, data.events);
-        const last = merged[merged.length - 1];
-        lastEventIdRef.current = last?.id;
-        return merged;
-      });
+      setEvents((current) => mergeEvents(current, data.events));
       setError(null);
     } catch (err) {
       if (!mounted.current) return;
@@ -104,8 +98,7 @@ export function useSentra(): UseSentraResult {
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
     const interval = window.setInterval(refreshState, STATE_POLL_MS);
@@ -168,7 +161,6 @@ export function useSentra(): UseSentraResult {
       await runAction(async () => {
         const data = await resetWorld(resetEvents);
         setState(data);
-        lastEventIdRef.current = undefined;
         if (resetEvents) {
           setEvents([]);
           return;
