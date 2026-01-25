@@ -20,6 +20,7 @@ class TargetState:
 class AutonomyState:
     enabled: bool = False
     targets: Dict[str, TargetState] = field(default_factory=dict)
+    last_tick_processed: Optional[int] = None
 
 
 _STATE = AutonomyState()
@@ -29,6 +30,7 @@ def set_autonomy_enabled(enabled: bool, tick: Optional[int] = None, conn: Any = 
     _STATE.enabled = bool(enabled)
     if not _STATE.enabled:
         _STATE.targets.clear()
+        _STATE.last_tick_processed = None
     event_service.append_event(
         tick=_safe_tick(tick),
         event_type="autonomy",
@@ -53,6 +55,12 @@ def process_autonomy(
         return world_state
 
     tick = _safe_tick(world_state.get("tick"))
+    if _STATE.last_tick_processed is not None:
+        if tick < _STATE.last_tick_processed:
+            _STATE.targets.clear()
+            _STATE.last_tick_processed = None
+        elif tick == _STATE.last_tick_processed:
+            return world_state
     incidents = controller.detect_incidents(world_state)
 
     for incident in incidents:
@@ -96,6 +104,10 @@ def process_autonomy(
                 payload={"action": decision["action"], "target": target},
                 conn=conn,
             )
+            if last_state:
+                last_state.last_action_tick = tick
+            else:
+                _STATE.targets[target] = TargetState(last_action=None, last_action_tick=tick)
             continue
 
         event_service.append_event(
@@ -137,6 +149,7 @@ def process_autonomy(
             conn=conn,
         )
 
+    _STATE.last_tick_processed = tick
     return world_state
 
 
@@ -177,49 +190,21 @@ def _default_execute_action(
     if action == "disableCooling":
         server["cooling"] = False
         return world_state
-    if action == "restart":
-        server["temp"] = min(float(server.get("temp", 0.0)), 70.0)
-        server["error_rate"] = 0.0
-        return world_state
-    if action == "throttle":
-        current = world_state.get("incoming_traffic", 0)
-        if isinstance(current, (int, float)) and not isinstance(current, bool):
-            world_state["incoming_traffic"] = max(0, current - 10)
-        return world_state
-    if action == "reroute":
-        _reroute_load(servers, target)
-        return world_state
-
     return world_state
 
 
-def _reroute_load(servers: Dict[str, Any], target: str) -> None:
-    target_state = servers.get(target)
-    if not isinstance(target_state, dict):
-        return
-    target_load = _as_number(target_state.get("load"), 0.0)
-    reduction = min(10.0, target_load)
-    target_state["load"] = max(0.0, target_load - reduction)
-
-    others = [key for key in servers.keys() if key != target]
-    if not others:
-        return
-    per_server = reduction / len(others)
-    for key in others:
-        state = servers.get(key)
-        if not isinstance(state, dict):
-            continue
-        load = _as_number(state.get("load"), 0.0)
-        state["load"] = min(100.0, load + per_server)
-
-
 def _group_incidents_by_target(incidents: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    grouped: Dict[str, Dict[str, Any]] = {}
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
     for incident in incidents:
         target = incident.get("target")
-        if target and target not in grouped:
-            grouped[target] = incident
-    return grouped
+        if not target:
+            continue
+        grouped.setdefault(target, []).append(incident)
+
+    selected: Dict[str, Dict[str, Any]] = {}
+    for target, target_incidents in grouped.items():
+        selected[target] = _select_most_severe(target_incidents)
+    return selected
 
 
 def _clear_inactive_targets(active_targets: Set[str]) -> None:
@@ -238,3 +223,30 @@ def _as_number(value: Any, default: float) -> float:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
     return float(default)
+
+
+def _select_most_severe(incidents: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not incidents:
+        return {}
+
+    metric_priority = {"temp": 3, "error_rate": 2, "health": 1}
+
+    def score(incident: Dict[str, Any]) -> float:
+        metric = str(incident.get("metric") or "")
+        value = _as_number(incident.get("value"), 0.0)
+        threshold = _as_number(incident.get("threshold"), 1.0)
+        if metric == "health":
+            severity = max(0.0, (threshold - value) / threshold)
+        else:
+            severity = max(0.0, (value - threshold) / threshold)
+        return severity
+
+    incidents_sorted = sorted(
+        incidents,
+        key=lambda incident: (
+            score(incident),
+            metric_priority.get(str(incident.get("metric") or ""), 0),
+        ),
+        reverse=True,
+    )
+    return incidents_sorted[0]
