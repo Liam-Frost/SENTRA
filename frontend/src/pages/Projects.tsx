@@ -127,12 +127,12 @@ export default function ProjectsPage() {
 
   const closeEdit = () => {
     setEditOpen(false);
-    setSelectedProjectId(null);
     setLbOpen(false);
   };
 
   const openLoadBalancerMenu = async () => {
     if (!selectedProject) return;
+    setEditOpen(false);
     setLbOpen(true);
     setEditingLbId(null);
     setLbDraft({ ...EMPTY_LB_DRAFT, projectId: selectedProject.id });
@@ -143,6 +143,11 @@ export default function ProjectsPage() {
     setLbOpen(false);
     setEditingLbId(null);
     setLbDraft(EMPTY_LB_DRAFT);
+  };
+
+  const backToProjectEditor = () => {
+    setLbOpen(false);
+    setEditOpen(true);
   };
 
   const toggleLbNode = (nodeId: string) => {
@@ -427,81 +432,96 @@ export default function ProjectsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-              {lbOpen ? (
-                <section className="project-lb-panel">
-                  <div className="operations-panel-head">
-                    <div>
-                      <div className="card-title">Load balancer nodes</div>
-                      <div className="control-hint">Create, adjust, and remove load balancer nodes under this project.</div>
-                    </div>
-                    <button type="button" className="button outline" onClick={closeLoadBalancerMenu}>Close menu</button>
-                  </div>
+      {lbOpen && selectedProject ? (
+        <div className="overlay-shell" role="presentation" onClick={closeLoadBalancerMenu}>
+          <div className="overlay-panel" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <div className="overlay-head">
+              <div>
+                <div className="card-title">Load balancer nodes</div>
+                <div className="payload-label">{selectedProject.name}</div>
+              </div>
+              <div className="operations-actions">
+                <button type="button" className="button outline" onClick={backToProjectEditor}>Back to project</button>
+                <button type="button" className="button outline" onClick={closeLoadBalancerMenu}>Close</button>
+              </div>
+            </div>
+            <div className="overlay-body">
+              <div className="command-list">
+                {projectBalancers.length === 0 ? (
+                  <div className="empty">No load balancer nodes for this project yet.</div>
+                ) : (
+                  projectBalancers.map((balancer) => {
+                    const node = nodeMap.get(balancer.nodeId);
+                    return (
+                      <div key={balancer.id} className="command-row" style={{ cursor: "default" }}>
+                        <div className="command-row-main">
+                          <div className="command-row-title">{balancer.type} · {balancer.listenPort ?? "-"}</div>
+                          <div className="command-row-meta">{node?.hostname ?? balancer.nodeId}</div>
+                        </div>
+                        <div className="operations-actions">
+                          <span className={`severity-badge severity-${balancer.status === "running" ? "succeeded" : "queued"}`}>{balancer.status}</span>
+                          <button type="button" className="button outline" onClick={() => startEditBalancer(balancer)}>Edit</button>
+                          <button type="button" className="button outline" onClick={() => removeBalancer(balancer.id)}>Delete</button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
 
-                  <div className="project-lb-form-grid">
-                    <div className="project-field">
-                      <label>Target nodes</label>
-                      <div className="operations-v2-node-grid">
-                        {nodes.map((node) => (
+              <section className="project-lb-panel">
+                <div className="operations-panel-head">
+                  <div className="card-title">{editingLbId ? "Edit node" : "Add node"}</div>
+                  <button type="button" className="button outline" onClick={resetBalancerDraft}>Reset</button>
+                </div>
+
+                <div className="project-lb-form-grid">
+                  <div className="project-field">
+                    <label>Target nodes</label>
+                    <div className="operations-v2-node-grid">
+                      {nodes.map((node) => {
+                        const lockedToSingleEdit = Boolean(editingLbId) && lbDraft.nodeIds[0] !== node.id;
+                        return (
                           <label key={node.id} className={`operations-v2-node ${lbDraft.nodeIds.includes(node.id) ? "selected" : ""}`.trim()}>
                             <input
                               type="checkbox"
                               checked={lbDraft.nodeIds.includes(node.id)}
                               onChange={() => toggleLbNode(node.id)}
-                              disabled={Boolean(editingLbId) && lbDraft.nodeIds[0] !== node.id && lbDraft.nodeIds.includes(node.id) === false}
+                              disabled={lockedToSingleEdit}
                             />
                             <span>{node.hostname}</span>
                           </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="project-lb-inline-fields">
-                      <div className="project-field">
-                        <label htmlFor="lbType">Type</label>
-                        <select id="lbType" value={lbDraft.type} onChange={(event) => setLbDraft((current) => ({ ...current, type: event.target.value as BalancerType }))}>
-                          <option value="nginx">nginx</option>
-                          <option value="haproxy">haproxy</option>
-                          <option value="traefik">traefik</option>
-                        </select>
-                      </div>
-                      <div className="project-field">
-                        <label htmlFor="lbPort">Listen port</label>
-                        <input id="lbPort" type="number" min={1} max={65535} value={lbDraft.listenPort} onChange={(event) => setLbDraft((current) => ({ ...current, listenPort: event.target.value }))} />
-                      </div>
-                    </div>
-                    <div className="overlay-actions">
-                      <button type="button" className="button outline" onClick={resetBalancerDraft}>Reset</button>
-                      <div className="spacer" />
-                      <button type="button" className="button primary" disabled={saving} onClick={saveBalancer}>
-                        {saving ? "Saving..." : editingLbId ? "Update node" : "Create node"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="command-list">
-                    {projectBalancers.length === 0 ? (
-                      <div className="empty">No load balancer nodes for this project yet.</div>
-                    ) : (
-                      projectBalancers.map((balancer) => {
-                        const node = nodeMap.get(balancer.nodeId);
-                        return (
-                          <div key={balancer.id} className="command-row" style={{ cursor: "default" }}>
-                            <div className="command-row-main">
-                              <div className="command-row-title">{balancer.type} · {balancer.listenPort ?? "-"}</div>
-                              <div className="command-row-meta">{node?.hostname ?? balancer.nodeId}</div>
-                            </div>
-                            <div className="operations-actions">
-                              <span className={`severity-badge severity-${balancer.status === "running" ? "succeeded" : "queued"}`}>{balancer.status}</span>
-                              <button type="button" className="button outline" onClick={() => startEditBalancer(balancer)}>Adjust</button>
-                              <button type="button" className="button outline" onClick={() => removeBalancer(balancer.id)}>Remove</button>
-                            </div>
-                          </div>
                         );
-                      })
-                    )}
+                      })}
+                    </div>
                   </div>
-                </section>
-              ) : null}
+                  <div className="project-lb-inline-fields">
+                    <div className="project-field">
+                      <label htmlFor="lbType">Type</label>
+                      <select id="lbType" value={lbDraft.type} onChange={(event) => setLbDraft((current) => ({ ...current, type: event.target.value as BalancerType }))}>
+                        <option value="nginx">nginx</option>
+                        <option value="haproxy">haproxy</option>
+                        <option value="traefik">traefik</option>
+                      </select>
+                    </div>
+                    <div className="project-field">
+                      <label htmlFor="lbPort">Listen port</label>
+                      <input id="lbPort" type="number" min={1} max={65535} value={lbDraft.listenPort} onChange={(event) => setLbDraft((current) => ({ ...current, listenPort: event.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="overlay-actions">
+                    <div className="spacer" />
+                    <button type="button" className="button primary" disabled={saving} onClick={saveBalancer}>
+                      {saving ? "Saving..." : editingLbId ? "Save node" : "Create node"}
+                    </button>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         </div>

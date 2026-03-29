@@ -71,13 +71,6 @@ export default function Dashboard({
 
   const summary = dashboard.summary;
   const recentEvents = useMemo(() => [...events].reverse().slice(0, 4), [events]);
-  const busiestNode = useMemo(() => {
-    const nodes = dashboard.nodes;
-    if (nodes.length === 0) return null;
-    return nodes.reduce((current, node) =>
-      node.metrics.cpu > current.metrics.cpu ? node : current
-    );
-  }, [dashboard.nodes]);
 
   return (
     <div className="page">
@@ -135,21 +128,6 @@ export default function Dashboard({
             <div className="metric-row"><span>Average disk</span><strong>{formatPercent(summary.avgDisk)}</strong></div>
             <MetricBar value={summary.avgDisk} max={100} tone="tone-ink" label="Average disk" />
           </div>
-        </div>
-
-        <div className="card stat-card span-2x1">
-          <div className="card-title">Busiest node</div>
-          {busiestNode ? (
-            <>
-              <div className="stat-value stat-value-text">{busiestNode.hostname}</div>
-              <div className="stat-sub">Highest CPU load in the current snapshot</div>
-              <div className="stat-row"><span>CPU</span><span className="stat-inline">{formatPercent(busiestNode.metrics.cpu)}</span></div>
-              <div className="stat-row"><span>Memory</span><span className="stat-inline">{formatPercent(busiestNode.metrics.memory)}</span></div>
-              <div className="stat-row"><span>Health</span><span className="stat-inline">{formatPercent(busiestNode.metrics.health)}</span></div>
-            </>
-          ) : (
-            <div className="empty">No nodes reporting yet.</div>
-          )}
         </div>
 
         <div className="card stat-card span-4x1">
