@@ -1,113 +1,160 @@
 # Data Model
 
-This document defines SENTRA's core data structures.
+Source of truth: `docs/00_PROJECT_CONTEXT.md`
 
-Source of truth: `docs/00_PROJECT_CONTEXT.md`.
+## Fleet domain
 
----
+### Nodes
 
-## World State
+Represents a managed server.
 
-### ServerState
+Important fields:
 
-| Field         | Type  | Range      | Notes |
-| ------------- | ----- | ---------- | ----- |
-| load          | float | 0-100      | CPU/traffic load |
-| temp          | float | C          | Temperature |
-| error_rate    | float | %          | Failure rate |
-| power         | float | Watts      | Power consumption |
-| health        | int   | 0-100      | Health score |
-| cooling       | bool  | true/false | Cooling enabled |
-| cooling_level | float | 0-1        | Cooling intensity (0-100%) |
-| status        | str   | enum       | booting, running, restarting, thermal_shutdown, off |
+- `id`
+- `hostname`
+- `ip`
+- `os`
+- `arch`
+- `status`
+- `created_at`
+- `updated_at`
 
-### WorldState
+### Agents
 
-Minimum recommended JSON shape:
+Represents the installed probe identity associated with a node.
 
-```json
-{
-  "tick": 0,
-  "incoming_traffic": 0,
-  "servers": {
-    "S1": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"},
-    "S2": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"},
-    "S3": {"load": 0.0, "temp": 0.0, "error_rate": 0.0, "power": 0.0, "health": 100, "cooling": true, "cooling_level": 0.0, "status": "booting"}
-  },
-  "autonomy_enabled": false
-}
-```
+Important fields:
 
----
+- `id`
+- `node_id`
+- `hostname`
+- `version`
+- `capabilities`
+- `last_seen_at`
 
-## Faults
+### Metrics
 
-Supported fault types:
+Two layers are used:
 
-| Type          | Effect                     |
-| ------------- | -------------------------- |
-| overheat      | +3 C per tick              |
-| hardware_fail | +2% error per tick         |
-| network_spike | +30 load for target server |
+- `node_metrics_latest`
+- `node_metric_samples`
 
----
+Stored metrics include:
 
-## Incidents
+- CPU
+- memory
+- disk
+- network in/out
+- temperature
+- error rate
+- health
+- power
 
-Incident trigger conditions:
+## Projects and load balancers
 
-```
-temp > 80
-OR error_rate > 5%
-OR health < 60
-OR load > 85
-```
+### Projects
 
----
+- `id`
+- `name`
+- `description`
+- `created_at`
+- `updated_at`
 
-## Actions
+### Load balancers
 
-Action identifiers (canonical):
+- `id`
+- `project_id`
+- `node_id`
+- `type`
+- `status`
+- `listen_port`
+- `config`
+- `created_at`
+- `updated_at`
 
-- reroute
-- throttle
-- enableCooling
-- disableCooling
-- restart
+One project can own multiple load balancer nodes.
 
----
+## Operation templates
 
-## Event Timeline
+### Operation templates
 
-The event timeline stores:
+- `id`
+- `name`
+- `description`
+- `created_at`
+- `updated_at`
 
-- fault injections
-- incident detections
-- controller decisions and executions
-- AI explanation outputs
+### Operation template steps
 
-Suggested event record shape:
+- `id`
+- `template_id`
+- `position`
+- `name`
+- `command`
+- `timeout_sec`
+- `continue_on_error`
 
-```json
-{
-  "id": 1,
-  "tick": 42,
-  "ts": "2026-01-24T12:34:56Z",
-  "type": "incident",
-  "message": "temp > 80 on S2",
-  "payload": {}
-}
-```
+## Execution runtime
 
-Suggested SQLite schema (implementation guidance):
+Template executions currently reuse the existing operations runtime.
 
-```sql
-CREATE TABLE events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  tick INTEGER NOT NULL,
-  ts TEXT NOT NULL,
-  type TEXT NOT NULL,
-  message TEXT NOT NULL,
-  payload TEXT
-);
-```
+### Operations
+
+Used to persist execution jobs.
+
+For template-driven executions:
+
+- `action_type = template_execution`
+- `parameters.template_id`
+- `parameters.template_name`
+- `parameters.steps[]`
+
+### Operation runs
+
+One record per node target.
+
+### Operation run logs
+
+Stores streamed or uploaded run logs.
+
+## Load balancer policy domain
+
+### LB policies
+
+- `id`
+- `project_id`
+- `name`
+- `description`
+- `status`
+- `dr_mode`
+- `health_check_path`
+- `health_check_interval_sec`
+- `failure_threshold`
+- `recovery_threshold`
+- `auto_failback`
+- `created_at`
+- `updated_at`
+
+### LB policy allocations
+
+- `id`
+- `policy_id`
+- `node_id`
+- `weight`
+- `enabled`
+- `priority`
+
+## Events
+
+Events remain the shared audit timeline.
+
+Current common event areas:
+
+- node lifecycle
+- agent lifecycle
+- operation template activity
+- execution activity
+- project changes
+- load balancer changes
+- policy changes
+- incident signals from metrics thresholds

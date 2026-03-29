@@ -1,77 +1,25 @@
-# Autonomy Policy
+# Autonomy And Safety Notes
 
-This document defines SENTRA's autonomy behavior and safety constraints.
+Source of truth: `docs/00_PROJECT_CONTEXT.md`
 
-Source of truth: `docs/00_PROJECT_CONTEXT.md`.
+SENTRA no longer presents generic autonomy as the primary product workflow.
 
----
+## Current position
 
-## Safety Principles
+- the main product is operator-driven
+- automation is explicit through operation templates and policy apply flows
+- AI remains advisory only
+- simulator autonomy is now debug/demo-only
 
-- Safety rules override autonomy.
-- AI is advisory only (planner/explainer), never an executor.
-- All state updates happen via tick.
-- Incidents and actions must be logged.
+## Safety principles that still matter
 
----
+- agents execute only server-provided work items
+- all executions must be logged through operations and event records
+- high-risk actions should remain visible and auditable
+- simulator mode must stay hidden unless explicitly enabled
 
-## Incident Detection
+## Simulation note
 
-Incident triggered when:
-
-```
-temp > 80
-OR error_rate > 5%
-OR health < 60
-```
-
----
-
-## Control Strategy (Rule-Based)
-
-Priority order:
-
-1. enableCooling
-2. reroute
-3. throttle
-4. restart (only if safe)
-
----
-
-## Restart Safety Constraint
-
-Restart allowed only if:
-
-```
-temp < 85 AND error_rate > 5
-```
-
-If restart is unsafe, the controller must not execute it and must log a
-recommendation/block reason.
-
----
-
-## Self-Correction
-
-After action execution:
-
-```
-wait 5 ticks
-re-evaluate state
-if incident persists:
-  escalate actions
-```
-
-Escalation means moving forward in the priority order.
-
----
-
-## Logging Requirements
-
-The timeline must include:
-
-- fault injection events
-- incident detection events
-- controller decisions (including blocked actions)
-- action execution events
-- AI explanation events (strict JSON)
+If simulation mode is enabled, legacy autonomy behavior may still be exposed for
+debugging and demo purposes. That behavior is not the canonical product path and
+must not be used as the main reference for feature design.

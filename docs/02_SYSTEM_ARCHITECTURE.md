@@ -1,101 +1,86 @@
 # System Architecture
 
-This document describes SENTRA's runtime architecture and data flow.
+Source of truth: `docs/00_PROJECT_CONTEXT.md`
 
-Source of truth: `docs/00_PROJECT_CONTEXT.md`.
+## High-level architecture
 
----
-
-## High-Level Diagram
-
-```
+```text
 React Frontend
     |
     v
 Flask REST API
     |
-    v
-Simulation Engine
+    +--> Fleet / Projects / Policies / Operations services
     |
-    v
-Autonomy Controller
+    +--> PostgreSQL / SQLite
     |
-    v
-SQLite Event Store
+    +--> Event timeline
     |
-    v
-AI Explanation Layer
+    +--> Agent command queue via operations pipeline
+
+Probe Agent
+    |
+    +--> register / heartbeat / metrics
+    +--> poll commands
+    +--> execute ordered shell steps
+    +--> upload logs and results
 ```
 
-Key separation:
+## Major backend domains
 
-- Autonomy controller executes actions.
-- AI layer is planner/explainer only.
+### Infrastructure service
 
----
+- nodes
+- agents
+- heartbeats
+- latest metrics
+- projects
+- load balancers
+- dashboard summary
 
-## Responsibilities
+### Operation template service
 
-### Frontend (React + TypeScript)
+- template CRUD
+- ordered step management
+- execution creation
+- execution listing/detail
 
-- Visualize server metrics and incident states
-- Provide controls for:
-  - tick advance
-  - fault injection
-  - autonomy toggle
-- Display event timeline
+### Load balancer policy service
 
-### Backend API (Flask)
+- policy CRUD
+- node allocations
+- DR settings
+- policy apply workflow
 
-- Exposes core REST endpoints
-- Validates inputs
-- Orchestrates simulation, controller, persistence, AI calls
+### Operation runtime service
 
-### Simulation Engine
+- persists execution records in `operations` and `operation_runs`
+- exposes command polling to agents
+- stores run logs and results
 
-- Owns world state (3 servers + `incoming_traffic`)
-- Updates state once per tick using the defined physical rules
-- Applies fault effects during ticks
+## Frontend structure
 
-### Autonomy Controller
+Primary pages:
 
-- Detects incidents based on thresholds
-- Chooses actions using the fixed priority order
-- Enforces safety constraints (notably restart gating)
-- Implements self-correction loop (wait 5 ticks, re-check)
+- `Dashboard`
+- `Fleet`
+- `Projects`
+- `Policies`
+- `Operations`
+- `Events`
 
-### Event Store (SQLite)
+Interaction rule:
 
-- Persists timeline of:
-  - faults
-  - incidents
-  - actions
-  - AI outputs
+- main page = library/listing
+- overlay = create/edit/detail
 
-### AI Layer
+## Simulation support
 
-- Generates explanation and recommendations
-- Output is strict JSON (validated)
-- Output is stored to the event timeline
+The simulator still exists in the codebase.
 
----
+Current role:
 
-## Core Runtime Loops
+- hidden debug or demo support
+- fallback world-state provider when `SENTRA_SIM_ENABLED=true`
 
-### Manual (Human-Driven)
-
-1. User calls `/api/tick`
-2. Simulation advances N ticks
-3. State is returned and/or refreshed via `/api/state`
-4. Events are available via `/api/events`
-
-### Autonomous (System-Driven)
-
-Each tick (every 1 second):
-
-1. Simulation advances 1 tick
-2. Controller detects incident thresholds
-3. If incident exists, controller executes safe actions (rule-based)
-4. Controller waits 5 ticks before escalating (self-correction)
-5. Events are written to SQLite
-6. AI may be called to generate explanation (advisory only)
+It is not the primary architecture described to product users.

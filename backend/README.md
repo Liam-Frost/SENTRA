@@ -1,13 +1,13 @@
 # SENTRA Backend
 
-Flask REST API for the SENTRA simulator and autonomy loop.
+Flask API for the SENTRA control plane.
 
-The backend owns:
+The backend currently serves four major responsibilities:
 
-- tick-based simulation (3 servers: `S1`, `S2`, `S3`)
-- autonomy policy/controller
-- realtime tick loop (server-driven ticking)
-- SQLite event log (incidents/actions/faults/AI explanations)
+- fleet registration, heartbeat, and metrics ingestion
+- operation template CRUD and execution orchestration
+- project and load balancer management
+- load balancer policy CRUD and apply workflow
 
 ## Setup
 
@@ -23,7 +23,7 @@ python -m venv .venv
 ".venv/bin/python" -m pip install -r requirements.txt
 ```
 
-## Run (port 5000)
+## Run
 
 ```bash
 # Windows
@@ -33,57 +33,57 @@ python -m venv .venv
 ".venv/bin/python" -m flask --app app.main run --port 5000
 ```
 
-## API
+## Persistence
 
-Base path: `/api`
+Preferred:
+
+- `SENTRA_DATABASE_URL=postgresql://...`
+
+Fallback:
+
+- `SENTRA_DB_PATH=...`
+
+If `SENTRA_DATABASE_URL` is not set, the backend uses local SQLite storage.
+
+## Environment variables
+
+- `SENTRA_DATABASE_URL`: PostgreSQL connection string
+- `SENTRA_DB_PATH`: SQLite fallback path
+- `SENTRA_SIM_ENABLED`: expose simulator/debug endpoints when `true`
+- `SENTRA_AI_API_URL` / `SENTRA_AI_API_KEY` / `SENTRA_AI_MODEL`: optional AI integration
+
+Simulation-specific settings still exist for debug flows, but they are not part of
+the main product path.
+
+## Main API areas
+
+Control plane:
+
+- `GET /api/capabilities`
+- `GET /api/dashboard`
+- `GET /api/nodes`
+- `GET /api/projects`
+- `GET /api/lb-policies`
+- `GET /api/operation-templates`
+
+Agent:
+
+- `POST /api/agents/register`
+- `POST /api/agents/heartbeat`
+- `POST /api/agents/metrics`
+- `GET /api/agents/commands/next`
+- `POST /api/agents/commands/:run_id/logs`
+- `POST /api/agents/commands/:run_id/result`
+
+Legacy/debug:
 
 - `GET /api/state`
 - `POST /api/tick`
 - `POST /api/fault`
-- `GET /api/events`
-- `POST /api/autonomy`
 - `POST /api/reset`
-- `GET /api/realtime`
-- `POST /api/realtime`
+- `GET/POST /api/realtime`
 
-Contract: `docs/03_API_CONTRACT.md`.
-
-### Realtime mode
-
-Enable/disable the server-driven tick loop:
-
-```bash
-curl -s http://localhost:5000/api/realtime
-curl -s -X POST http://localhost:5000/api/realtime \
-  -H "content-type: application/json" \
-  -d '{"enabled": true, "hz": 5}'
-```
-
-## Simulation state
-
-`GET /api/state` returns the world state and includes:
-
-- `sim_version`: helps detect stale/old backend processes
-- per server:
-  - `status`: `booting`, `running`, `restarting`, `thermal_shutdown`, `off`
-  - `cooling_level`: `0..1`
-
-## Persistence
-
-Operational data is stored in PostgreSQL when `SENTRA_DATABASE_URL` is set.
-SQLite remains available as a local fallback.
-
-- `SENTRA_DATABASE_URL` (optional): PostgreSQL connection string
-- `SENTRA_DB_PATH` (optional): explicit SQLite path
-- default SQLite path: `data/dev.sqlite3` (created on demand)
-
-## Environment variables
-
-- `SENTRA_SIM_SEED` (optional): deterministic simulation seed (default: `7`)
-- `SENTRA_DATABASE_URL` (optional): PostgreSQL connection string (preferred)
-- `SENTRA_DB_PATH` (optional): SQLite DB path fallback when `SENTRA_DATABASE_URL` is not set
-- `SENTRA_AI_API_URL` / `SENTRA_AI_API_KEY` / `SENTRA_AI_MODEL` (optional): AI explanations
-- `SENTRA_SIM_ENABLED` (optional): expose simulation endpoints when set to `true` (default: disabled)
+Canonical contract: `docs/03_API_CONTRACT.md`
 
 ## Tests
 
@@ -97,5 +97,7 @@ SQLite remains available as a local fallback.
 
 ## Notes
 
-- World state is in-memory; multi-process deployments create one world per process.
-- If `/api/realtime` returns 404, you're likely hitting an older backend process on port 5000.
+- operation template executions are stored through the existing `operations` / `operation_runs`
+  pipeline, with `action_type = template_execution`
+- load balancer policy apply currently creates execution jobs using generated shell-step payloads
+- simulation support remains in the backend for demo and debug purposes only

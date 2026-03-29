@@ -1,71 +1,45 @@
 # Vision And Scope
 
-This document defines SENTRA's vision, scope, and explicit non-goals.
-
-Source of truth: `docs/00_PROJECT_CONTEXT.md`.
-
----
+Source of truth: `docs/00_PROJECT_CONTEXT.md`
 
 ## Vision
 
-Build a fully autonomous, self-correcting micro data center control system that
-can monitor, diagnose, decide, and act without human intervention.
+Turn SENTRA into a usable server operations console instead of a simulator-first
+autonomy demo.
 
-This is an exploration prototype for "removing the human from the loop" in a
-controlled simulated environment.
+The product should help operators manage real nodes, reusable operations, projects,
+and project-level load balancer behavior from one control plane.
 
----
+## In scope
 
-## Target Scenario
+- agent registration, heartbeat, and latest metrics ingestion
+- node inventory and control-plane dashboarding
+- operation template CRUD
+- ordered shell-step execution on selected nodes
+- project CRUD
+- load balancer node CRUD under projects
+- load balancer policy CRUD and apply flow
+- event/audit timeline
+- simulator kept as hidden debug/demo capability
 
-- Environment: simulated micro data center
-- Servers: `S1`, `S2`, `S3`
-- Time: discrete ticks (1 tick = 1 second)
-- Inputs:
-  - global `incoming_traffic` (0-300)
-  - fault injection via API
+## Out of scope for the current phase
 
----
+- full production-grade authz/authn
+- advanced scheduling and approvals for operations
+- automatic load balancer reconfiguration adapters for every real implementation
+- Kubernetes/cloud load balancer integrations
+- autonomous self-healing as the primary product story
 
-## In Scope (Stabilization + Demo)
+## Non-goals
 
-- Physical simulation rules and server state variables as defined
-- Incident detection thresholds as defined
-- Rule-based autonomy controller
-- Self-correction mechanism (wait 5 ticks, re-evaluate, escalate)
-- AI planner/explainer integration (strict JSON, advisory only)
-- SQLite event timeline persistence
-- Frontend dashboard for:
-  - state visualization
-  - fault injection
-  - autonomy toggle
-  - event timeline
+- do not present SENTRA as a generic autonomous decision engine in primary docs
+- do not treat simulation as the primary product workflow
+- do not keep first-level pages overloaded with creation and edit forms
 
----
+## Success criteria
 
-## Out Of Scope (For This Phase)
-
-- Production deployment and real telemetry integration
-- Authentication/authorization model
-- Multi-cluster federation
-- RL-based control (future extension)
-- Cloud hosting and distributed persistence
-
----
-
-## Non-Goals / Constraints
-
-- AI cannot execute actions directly.
-- All state updates happen via tick.
-- Safety constraints override autonomy.
-
----
-
-## Success Criteria
-
-Project success means:
-
-- Autonomous loop runs >= 30 minutes without crash
-- System recovers from injected faults without human intervention
-- AI explanations are coherent and stored as events
-- Demo is reproducible
+- operators can register real nodes and inspect fleet state
+- operators can create and run operation templates on chosen nodes
+- operators can manage projects and load balancer nodes under each project
+- operators can define per-project traffic and DR policies
+- key actions are visible in the event timeline

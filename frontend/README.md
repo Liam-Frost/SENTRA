@@ -1,18 +1,21 @@
 # SENTRA Frontend
 
-The SENTRA frontend is a React console for the 3-server simulation (S1/S2/S3).
-It displays live telemetry and the event timeline, and provides controls to:
+The frontend is a React control console for the SENTRA operations product.
 
-- advance ticks
-- inject faults
-- reset the world
-- toggle autonomy
+Primary UI areas:
 
-## Tech stack
+- `Dashboard`
+- `Fleet`
+- `Projects`
+- `Policies`
+- `Operations`
+- `Events`
 
-- React 18 + TypeScript
-- Vite 5
-- Tailwind CSS
+The UI is now organized around library-first pages:
+
+- main pages focus on listing domain objects
+- create/edit/details open in second-level overlays
+- simulation controls remain hidden unless simulation mode is enabled
 
 ## Local development
 
@@ -23,26 +26,33 @@ npm install
 npm run dev
 ```
 
-Default URL: `http://localhost:5173`
+Default URL:
 
-### API proxy
+- `http://localhost:5173`
 
-In development, `frontend/vite.config.ts` proxies `/api/*` to `http://localhost:5000`.
+## API proxy
 
-## Routes
+During development, `vite.config.ts` proxies `/api/*` to `http://localhost:5000`.
 
-Hash routes:
+## Current route set
 
 - `#/dashboard`
 - `#/fleet`
-- `#/control`
+- `#/projects`
+- `#/policies`
+- `#/operations`
 - `#/events`
 
-## API usage
+Simulation-enabled builds may also expose simulator-specific controls.
 
-API calls live in `frontend/src/api/sentra.ts` and are polled by `frontend/src/state/useSentra.ts`.
-The canonical contract is `docs/03_API_CONTRACT.md`.
+## Frontend API modules
+
+- `src/api/infrastructure.ts`
+- `src/api/operationTemplates.ts`
+- `src/api/lbPolicies.ts`
+- `src/api/operations.ts`
+- `src/api/sentra.ts`
 
 ## Environment variables
 
-- `VITE_API_BASE_URL` (optional): overrides the base URL used by `fetch`.
+- `VITE_API_BASE_URL`: optional API base override

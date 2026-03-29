@@ -1,55 +1,46 @@
 # Release Plan
 
-Current phase:
+## Current phase
 
-```
-Stabilization + Demo Preparation
-```
-
-This plan focuses on reliability, observability, and demo reproducibility.
-
----
+Control-plane foundation and product repositioning.
 
 ## Milestones
 
-### M1 - Simulation Correctness
+### M1 - Fleet foundation
 
-- Implement tick-based physical rules as defined
-- Maintain required server state variables for S1/S2/S3
-- Apply fault effects per tick
+- agent registration
+- heartbeat and metrics ingestion
+- node inventory and dashboard aggregation
 
-### M2 - Autonomy Reliability
+### M2 - Operations foundation
 
-- Implement incident thresholds
-- Implement action priority strategy
-- Implement restart safety constraint
-- Implement self-correction loop (wait 5 ticks, re-evaluate, escalate)
+- operation template CRUD
+- ordered shell-step execution
+- execution logs and status tracking
 
-### M3 - Observability
+### M3 - Project and load balancer management
 
-- Persist events to SQLite
-- Provide `/api/events` timeline endpoint
-- Visualize timeline and state in frontend
+- project CRUD
+- project-scoped load balancer node CRUD
 
-### M4 - AI Explanations
+### M4 - Policy foundation
 
-- Trigger AI on incidents
-- Enforce strict JSON validation
-- Store AI outputs as timeline events
+- load balancer policy CRUD
+- per-node traffic allocation
+- DR configuration
+- apply workflow via execution pipeline
 
-### M5 - Demo Readiness
+### M5 - Production hardening follow-ups
 
-- Demo run is reproducible
-- Autonomy loop runs >= 30 minutes without crash
-- System recovers from injected faults
+- real load balancer adapters
+- auth/RBAC
+- approvals and scheduling
+- deployment hardening
 
----
+## Release readiness checklist
 
-## Demo-Ready Checklist
-
-- [ ] Fault injection works for all supported types
-- [ ] Incidents trigger reliably at thresholds
-- [ ] Controller recovers using safe actions
-- [ ] Restart gating is enforced and logged
-- [ ] AI output is validated and visible
-- [ ] Timeline persists across restarts (SQLite)
+- [ ] PostgreSQL-backed deployment path documented and verified
+- [ ] Agent registration and execution flow stable
+- [ ] Project and load balancer management validated in UI
+- [ ] Policy apply flow validated end-to-end
+- [ ] Dashboard reflects current product model rather than simulator metrics

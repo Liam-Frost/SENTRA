@@ -1,38 +1,17 @@
 # Risk And Fallback
 
-This file tracks known risks and fallback strategies for SENTRA.
-
-Source of truth: `docs/00_PROJECT_CONTEXT.md`.
-
----
-
-## Risk Register
+## Risk register
 
 | ID | Risk | Impact | Mitigation |
 | -- | ---- | ------ | ---------- |
-| R001 | Temperature runaway | Health collapse; demo failure | Early enableCooling; reroute/throttle; block unsafe restart |
-| R002 | Action thrashing/oscillation | Instability; confusing timeline | Enforce self-correction wait (5 ticks) before escalation |
-| R003 | Unsafe restart during high temp | Violates safety; worsens incident | Hard gate: restart only if temp < 85 AND error_rate > 5 |
-| R004 | AI invalid JSON / timeout | Breaks UI/logging | Validate schema; ignore invalid AI output; keep rule-based autonomy |
-| R005 | AI hallucinated/unsafe advice | Operator confusion | Never execute AI; present as advisory; rely on safety policy |
-| R006 | Event store unavailable | Lost observability | Buffer events in memory and retry; do not block simulation tick |
-| R007 | Non-reproducible demo due to randomness | Unstable presentation | Prefer deterministic seeds/scenarios for demo runs |
+| R001 | Agent executes unsafe shell content | Node disruption | Keep execution sources explicit, audit logs enabled, and templates reviewable |
+| R002 | PostgreSQL unavailable | Control-plane degradation | Keep SQLite fallback for local/dev use and fail early on missing DB config in production |
+| R003 | Load balancer apply flow is still placeholder-based | Product gap between UI and real balancer runtime | Implement nginx/haproxy/traefik adapters as a follow-up milestone |
+| R004 | Legacy simulator docs or flows confuse users | Product misunderstanding | Keep simulation hidden by default and clearly mark it as debug/demo-only |
+| R005 | Overloaded detail overlays reduce usability | Operator friction | Continue splitting detail overlays into smaller tabs/sections as needed |
 
----
+## Fallback rules
 
-## Fallback Playbook
-
-### Disable Autonomy
-
-- Call `/api/autonomy` with `{ "enabled": false }`.
-- Continue using `/api/tick` to drive the simulation manually.
-
-### Operate Without AI
-
-- If AI is down or invalid, continue autonomy with rule-based controller only.
-- Log AI failure as an event (type `ai_error`) if supported.
-
-### Recover Observability
-
-- If SQLite is locked/unavailable, buffer events in memory.
-- Flush buffered events when persistence recovers.
+- if AI is unavailable, keep the control plane fully usable without AI
+- if agent command execution fails, preserve logs and mark the execution failed rather than hiding the result
+- if load balancer apply cannot complete, leave policy data intact and surface the failure through executions and events

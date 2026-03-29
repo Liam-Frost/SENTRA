@@ -1,20 +1,13 @@
 # Task Registry
 
-This file is the task registry for SENTRA.
+Working registry for product-facing implementation tasks.
 
-Use it to track stabilization + demo preparation work.
+Use this document for major follow-up work such as:
 
----
+- real load balancer adapter implementation
+- auth and RBAC
+- execution approvals and scheduling
+- production deployment hardening
 
-## How To Use
-
-- Add tasks as rows in the table.
-- Keep titles measurable.
-- Link to code/docs/PRs where applicable.
-
----
-
-## Tasks
-
-| ID | Date | Owner | Status | Title | Notes/Links |
-| -- | ---- | ----- | ------ | ----- | ---------- |
+| ID | Date | Owner | Status | Title | Notes |
+| -- | ---- | ----- | ------ | ----- | ----- |
