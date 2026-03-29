@@ -38,11 +38,28 @@ export type DashboardSummary = {
   avgCpu: number;
   avgMemory: number;
   avgDisk: number;
+  projects: number;
+  loadBalancers: number;
+  policies: number;
+  activePolicies: number;
+  templates: number;
+  executions: number;
+  runningExecutions: number;
+  queuedExecutions: number;
+};
+
+export type DashboardExecution = {
+  status: string;
+  createdAt: number;
+  templateId?: string | null;
+  templateName?: string | null;
+  targetCount: number;
 };
 
 export type DashboardResponse = {
   summary: DashboardSummary;
   nodes: Node[];
+  recentExecutions: DashboardExecution[];
 };
 
 export type Project = {

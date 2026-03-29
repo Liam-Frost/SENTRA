@@ -329,6 +329,44 @@ def get_dashboard(conn: Any) -> Dict[str, Any]:
     cpu = [_safe_float((node.get("metrics") or {}).get("cpu"), 0.0) for node in nodes]
     mem = [_safe_float((node.get("metrics") or {}).get("memory"), 0.0) for node in nodes]
     disk = [_safe_float((node.get("metrics") or {}).get("disk"), 0.0) for node in nodes]
+    project_count_row = conn.execute("SELECT COUNT(*) AS count FROM projects").fetchone()
+    lb_count_row = conn.execute("SELECT COUNT(*) AS count FROM load_balancers").fetchone()
+    policy_rows = conn.execute("SELECT status FROM lb_policies")
+    template_count_row = conn.execute("SELECT COUNT(*) AS count FROM operation_templates").fetchone()
+    execution_rows = conn.execute(
+        "SELECT status, created_at, parameters, targets FROM operations WHERE action_type = ? ORDER BY created_at DESC LIMIT 5",
+        ("template_execution",),
+    )
+
+    policies = list(policy_rows)
+    recent_executions = []
+    total_executions = 0
+    running_executions = 0
+    queued_executions = 0
+    for row in conn.execute(
+        "SELECT status, created_at, parameters FROM operations WHERE action_type = ? ORDER BY created_at DESC",
+        ("template_execution",),
+    ):
+        total_executions += 1
+        status = str(row["status"])
+        if status == "running":
+            running_executions += 1
+        if status == "queued":
+            queued_executions += 1
+
+    for row in execution_rows:
+        params = _json_dict(_row_get(row, "parameters"))
+        targets = _json_list(_row_get(row, "targets"))
+        recent_executions.append(
+            {
+                "status": row["status"],
+                "createdAt": int(row["created_at"]),
+                "templateId": params.get("template_id"),
+                "templateName": params.get("template_name"),
+                "targetCount": len(targets),
+            }
+        )
+
     return {
         "summary": {
             "totalNodes": total,
@@ -338,8 +376,17 @@ def get_dashboard(conn: Any) -> Dict[str, Any]:
             "avgCpu": round(sum(cpu) / total, 2) if total > 0 else 0.0,
             "avgMemory": round(sum(mem) / total, 2) if total > 0 else 0.0,
             "avgDisk": round(sum(disk) / total, 2) if total > 0 else 0.0,
+            "projects": int(_row_get(project_count_row, "count", 0) or 0),
+            "loadBalancers": int(_row_get(lb_count_row, "count", 0) or 0),
+            "policies": len(policies),
+            "activePolicies": sum(1 for row in policies if str(row["status"]) == "active"),
+            "templates": int(_row_get(template_count_row, "count", 0) or 0),
+            "executions": total_executions,
+            "runningExecutions": running_executions,
+            "queuedExecutions": queued_executions,
         },
         "nodes": nodes,
+        "recentExecutions": recent_executions,
     }
 
 
@@ -800,6 +847,18 @@ def _json_dict(value: Any) -> Dict[str, Any]:
     except (TypeError, ValueError, json.JSONDecodeError):
         return {}
     return decoded if isinstance(decoded, dict) else {}
+
+
+def _json_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    if value is None:
+        return []
+    try:
+        decoded = json.loads(str(value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    return decoded if isinstance(decoded, list) else []
 
 
 def _slug(text: str) -> str:
