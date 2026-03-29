@@ -13,7 +13,8 @@ export function isIncident(server: ServerState) {
 
 export function getFleetStats(state: WorldState) {
   const servers = Object.values(state.servers);
-  const count = servers.length || 1;
+  const count = servers.length;
+  const divisor = count > 0 ? count : 1;
 
   const totals = servers.reduce(
     (acc, server) => {
@@ -29,10 +30,10 @@ export function getFleetStats(state: WorldState) {
   );
 
   return {
-    avgLoad: totals.load / count,
-    avgTemp: totals.temp / count,
-    avgHealth: totals.health / count,
-    avgError: totals.error / count,
+    avgLoad: totals.load / divisor,
+    avgTemp: totals.temp / divisor,
+    avgHealth: totals.health / divisor,
+    avgError: totals.error / divisor,
     totalPower: totals.power,
     coolingCount: totals.cooling,
     serverCount: count

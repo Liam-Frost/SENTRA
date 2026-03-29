@@ -1,4 +1,4 @@
-export type ServerId = "S1" | "S2" | "S3";
+export type ServerId = string;
 
 export type ServerStatus =
   | "running"
@@ -15,7 +15,13 @@ export type EventType =
   | "action"
   | "ai"
   | "autonomy"
-  | "reset";
+  | "reset"
+  | "policy"
+  | "agent"
+  | "node"
+  | "operation"
+  | "load_balancer"
+  | "project";
 
 export type MetricType = "temp" | "error_rate" | "health" | "load";
 
@@ -40,7 +46,7 @@ export interface ServerState {
 export interface WorldState {
   tick: number;
   incoming_traffic: number;
-  servers: Record<ServerId, ServerState>;
+  servers: Record<string, ServerState>;
   autonomy_enabled: boolean;
 }
 

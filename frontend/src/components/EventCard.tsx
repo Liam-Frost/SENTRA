@@ -1,5 +1,5 @@
 import type { EventRecord } from "../types";
-import { formatTime } from "../utils/format";
+import { formatDateTime } from "../utils/format";
 
 type EventCardProps = {
   event: EventRecord;
@@ -96,8 +96,8 @@ export default function EventCard({ event, variant = "full" }: EventCardProps) {
         <span className="event-message">{event.message}</span>
       </div>
       <div className="event-meta">
-        <span>Tick {event.tick}</span>
-        <span>{formatTime(event.ts)}</span>
+        <span>{formatDateTime(event.ts)}</span>
+        <span>ID {event.id}</span>
       </div>
       {variant === "full" ? renderPayload(event) : null}
     </div>

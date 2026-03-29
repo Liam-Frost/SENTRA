@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { EventRecord, IncidentPayload, WorldState } from "../types";
 import { createOperation } from "../state/operationStore";
 import { createDraftPolicyFromIncident } from "../state/policyStore";
+import { formatDateTime } from "../utils/format";
 
 type IncidentSeverity = "critical" | "high" | "medium" | "low";
 type IncidentStatus = "start" | "resolved";
@@ -10,7 +11,6 @@ type IncidentMetric = "temp" | "load" | "error_rate" | "health";
 
 type IncidentItem = {
   id: number;
-  tick: number;
   ts: string;
   message: string;
   target: string;
@@ -74,12 +74,6 @@ function normalizeStatus(payload: IncidentPayload): IncidentStatus {
   return payload.status === "resolved" ? "resolved" : "start";
 }
 
-function formatIsoTime(ts: string) {
-  const parsed = new Date(ts);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleTimeString();
-}
-
 export default function IncidentsPage({ state, events }: IncidentsPageProps) {
   const [statusFilter, setStatusFilter] = useState<IncidentStatus | "all">("all");
   const [severityFilter, setSeverityFilter] = useState<IncidentSeverity | "all">("all");
@@ -118,7 +112,6 @@ export default function IncidentsPage({ state, events }: IncidentsPageProps) {
       const { severity, score } = severityFromValue(metric, value, threshold);
       next.push({
         id: event.id,
-        tick: event.tick,
         ts: event.ts,
         message: event.message,
         target,
@@ -305,8 +298,7 @@ export default function IncidentsPage({ state, events }: IncidentsPageProps) {
                   </div>
                   <div className="incident-meta">
                     <span className={`severity-badge severity-${item.severity}`}>{item.severity}</span>
-                    <span>Tick {item.tick}</span>
-                    <span>{formatIsoTime(item.ts)}</span>
+                    <span>{formatDateTime(item.ts)}</span>
                   </div>
                 </button>
               ))
@@ -339,8 +331,8 @@ export default function IncidentsPage({ state, events }: IncidentsPageProps) {
                     <div className={`severity-badge severity-${selected.severity}`}>{selected.severity}</div>
                   </div>
                   <div>
-                    <div className="payload-label">Tick</div>
-                    <div>T{selected.tick}</div>
+                    <div className="payload-label">Occurred</div>
+                    <div>{formatDateTime(selected.ts)}</div>
                   </div>
                   <div>
                     <div className="payload-label">Value</div>
@@ -363,7 +355,7 @@ export default function IncidentsPage({ state, events }: IncidentsPageProps) {
                     <span>Value</span>
                   </div>
                   {affected.map((nodeId) => {
-                    const server = state.servers[nodeId];
+                    const server = state.servers[nodeId as keyof typeof state.servers];
                     const currentValue = server ? (server as any)[selected.metric] ?? 0 : 0;
                     return (
                       <button

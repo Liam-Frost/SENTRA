@@ -1,10 +1,9 @@
 import AnimatedList from "./AnimatedList";
-import { formatTime } from "../utils/format";
+import { formatDateTime } from "../utils/format";
 
 export type NotificationItem = {
   id: number;
   message: string;
-  tick: number;
   ts: string;
 };
 
@@ -53,8 +52,7 @@ export default function NotificationTray({
             <div className="notification-title">Incident detected</div>
             <div className="notification-message">{item.message}</div>
             <div className="notification-meta">
-              <span>Tick {item.tick}</span>
-              <span>{formatTime(item.ts)}</span>
+              <span>{formatDateTime(item.ts)}</span>
             </div>
           </div>
         )}

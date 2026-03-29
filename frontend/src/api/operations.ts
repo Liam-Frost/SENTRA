@@ -37,6 +37,16 @@ export type OperationRun = {
   exitCode?: number | null;
 };
 
+export type OperationLog = {
+  id: number;
+  runId: number;
+  operationId: string;
+  nodeId: string | null;
+  stream: "stdout" | "stderr" | "system";
+  message: string;
+  ts: number;
+};
+
 export async function listOperations(params: {
   status?: OperationStatus | "all";
   limit?: number;
@@ -73,4 +83,25 @@ export async function deleteOperation(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/api/operations/${encodeURIComponent(id)}`, {
     method: "DELETE"
   });
+}
+
+export async function cancelOperation(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/operations/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+export async function retryOperation(
+  id: string,
+  initiator = "retry"
+): Promise<{ operation: Operation }> {
+  return request<{ operation: Operation }>(`/api/operations/${encodeURIComponent(id)}/retry`, {
+    method: "POST",
+    body: JSON.stringify({ initiator })
+  });
+}
+
+export async function listOperationLogs(id: string): Promise<{ logs: OperationLog[] }> {
+  return request<{ logs: OperationLog[] }>(`/api/operations/${encodeURIComponent(id)}/logs`);
 }

@@ -1,16 +1,20 @@
 import { useSyncExternalStore } from "react";
 
-import type { Operation, OperationRun } from "../api/operations";
+import type { Operation, OperationLog, OperationRun } from "../api/operations";
 import {
+  cancelOperation as cancelOperationApi,
   createOperation as createOperationApi,
   deleteOperation as deleteOperationApi,
   getOperation,
-  listOperations
+  listOperationLogs,
+  listOperations,
+  retryOperation as retryOperationApi
 } from "../api/operations";
 
 type StoreState = {
   operations: Operation[];
   runs: OperationRun[];
+  logs: OperationLog[];
   loading: boolean;
   error: string | null;
 };
@@ -18,6 +22,7 @@ type StoreState = {
 let store: StoreState = {
   operations: [],
   runs: [],
+  logs: [],
   loading: false,
   error: null
 };
@@ -94,6 +99,27 @@ export async function deleteOperation(operationId: string) {
   await deleteOperationApi(operationId);
   setStore({
     operations: store.operations.filter((op) => op.id !== operationId),
-    runs: store.runs.filter((run) => run.operationId !== operationId)
+    runs: store.runs.filter((run) => run.operationId !== operationId),
+    logs: store.logs.filter((log) => log.operationId !== operationId)
   });
+}
+
+export async function cancelOperation(operationId: string) {
+  await cancelOperationApi(operationId);
+  await refreshOperation(operationId);
+}
+
+export async function retryOperation(operationId: string) {
+  const retried = await retryOperationApi(operationId);
+  if (retried?.operation) {
+    setStore({ operations: [retried.operation, ...store.operations] });
+  }
+  return retried?.operation ?? null;
+}
+
+export async function refreshOperationLogs(operationId: string) {
+  const data = await listOperationLogs(operationId);
+  const logs = Array.isArray(data.logs) ? data.logs : [];
+  const nextLogs = [...store.logs.filter((log) => log.operationId !== operationId), ...logs];
+  setStore({ logs: nextLogs, error: null });
 }

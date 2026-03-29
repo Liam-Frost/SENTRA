@@ -13,16 +13,17 @@ from app.persistence import db
 ALLOWED_STATUSES = {"queued", "running", "succeeded", "failed", "partial", "cancelled"}
 ALLOWED_APPROVAL = {"none", "pending", "approved", "rejected"}
 ALLOWED_MODES = {"simulation", "real"}
+FINAL_RUN_STATUSES = {"succeeded", "failed", "cancelled"}
 
 _OP_ID_LOCK = threading.RLock()
 _OP_COUNTER = 0
 
 
 def get_run_mode() -> str:
-    raw = os.getenv("SENTRA_RUN_MODE", "simulation")
-    mode = str(raw or "simulation").lower()
+    raw = os.getenv("SENTRA_RUN_MODE", "real")
+    mode = str(raw or "real").lower()
     if mode not in ALLOWED_MODES:
-        return "simulation"
+        return "real"
     return mode
 
 
@@ -255,6 +256,267 @@ def update_run_status(
     conn.execute(f"UPDATE operation_runs SET {', '.join(updates)} WHERE id = ?", params)
 
 
+def claim_next_run_for_node(node_id: str, conn: Any) -> Optional[Dict[str, Any]]:
+    row = conn.execute(
+        """
+        SELECT
+            r.id,
+            r.operation_id,
+            r.node_id,
+            r.status,
+            o.action_type,
+            o.parameters,
+            o.mode,
+            o.status AS operation_status,
+            o.approval_state
+        FROM operation_runs r
+        JOIN operations o ON o.id = r.operation_id
+        WHERE r.node_id = ?
+          AND r.status = 'queued'
+          AND o.status IN ('queued', 'running')
+          AND o.approval_state IN ('none', 'approved')
+        ORDER BY r.id ASC
+        LIMIT 1
+        """,
+        (node_id,),
+    ).fetchone()
+    if not row:
+        return None
+
+    run_id = int(row["id"])
+    now_ms = int(time.time() * 1000)
+    update_run_status(run_id, "running", conn, started_at=now_ms)
+    if str(_row_get(row, "operation_status") or "") == "queued":
+        update_operation_status(str(row["operation_id"]), "running", conn)
+
+    params_raw = _row_get(row, "parameters")
+    parameters: Optional[Dict[str, Any]] = None
+    if params_raw:
+        try:
+            decoded = json.loads(params_raw)
+            parameters = decoded if isinstance(decoded, dict) else None
+        except json.JSONDecodeError:
+            parameters = None
+
+    conn.commit()
+    return {
+        "runId": run_id,
+        "operationId": row["operation_id"],
+        "nodeId": _row_get(row, "node_id"),
+        "action": row["action_type"],
+        "parameters": parameters,
+        "mode": _row_get(row, "mode"),
+    }
+
+
+def append_run_log(
+    run_id: int,
+    stream: str,
+    message: str,
+    conn: Any,
+    ts: Optional[int] = None,
+) -> Dict[str, Any]:
+    if stream not in {"stdout", "stderr", "system"}:
+        stream = "system"
+    timestamp = int(ts) if isinstance(ts, int) else int(time.time() * 1000)
+
+    run = conn.execute(
+        "SELECT id, operation_id, node_id FROM operation_runs WHERE id = ?",
+        (int(run_id),),
+    ).fetchone()
+    if not run:
+        raise ValueError("run not found")
+
+    if db.is_postgres(conn):
+        cursor = conn.execute(
+            """
+            INSERT INTO operation_run_logs (run_id, operation_id, node_id, stream, message, ts)
+            VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (
+                int(run_id),
+                str(run["operation_id"]),
+                _row_get(run, "node_id"),
+                stream,
+                str(message),
+                timestamp,
+            ),
+        )
+        inserted = cursor.fetchone() or {}
+        log_id = int(inserted.get("id", 0)) if isinstance(inserted, dict) else int(inserted[0])
+    else:
+        cursor = conn.execute(
+            """
+            INSERT INTO operation_run_logs (run_id, operation_id, node_id, stream, message, ts)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(run_id),
+                str(run["operation_id"]),
+                _row_get(run, "node_id"),
+                stream,
+                str(message),
+                timestamp,
+            ),
+        )
+        log_id = int(cursor.lastrowid or 0)
+    conn.commit()
+    return {
+        "id": log_id,
+        "runId": int(run_id),
+        "operationId": str(run["operation_id"]),
+        "nodeId": _row_get(run, "node_id"),
+        "stream": stream,
+        "message": str(message),
+        "ts": timestamp,
+    }
+
+
+def list_operation_logs(operation_id: str, conn: Any) -> Dict[str, List[Dict[str, Any]]]:
+    cursor = conn.execute(
+        """
+        SELECT id, run_id, operation_id, node_id, stream, message, ts
+        FROM operation_run_logs
+        WHERE operation_id = ?
+        ORDER BY id ASC
+        """,
+        (operation_id,),
+    )
+    logs = [
+        {
+            "id": row["id"],
+            "runId": row["run_id"],
+            "operationId": row["operation_id"],
+            "nodeId": row["node_id"],
+            "stream": row["stream"],
+            "message": row["message"],
+            "ts": row["ts"],
+        }
+        for row in cursor
+    ]
+    return {"logs": logs}
+
+
+def complete_run(
+    run_id: int,
+    *,
+    status: str,
+    output: Optional[str],
+    exit_code: Optional[int],
+    conn: Any,
+    finished_at: Optional[int] = None,
+) -> Dict[str, Any]:
+    status_value = str(status or "").lower()
+    if status_value not in FINAL_RUN_STATUSES:
+        raise ValueError("status must be succeeded, failed, or cancelled")
+
+    row = conn.execute(
+        "SELECT id, operation_id, node_id FROM operation_runs WHERE id = ?",
+        (int(run_id),),
+    ).fetchone()
+    if not row:
+        raise ValueError("run not found")
+
+    ts = int(finished_at) if isinstance(finished_at, int) else int(time.time() * 1000)
+    code = int(exit_code) if isinstance(exit_code, int) else (0 if status_value == "succeeded" else 1)
+    update_run_status(
+        int(run_id),
+        status_value,
+        conn,
+        finished_at=ts,
+        output=output,
+        exit_code=code,
+    )
+    operation_status = recalculate_operation_status(str(row["operation_id"]), conn=conn)
+    conn.commit()
+    return {
+        "runId": int(run_id),
+        "operationId": str(row["operation_id"]),
+        "nodeId": _row_get(row, "node_id"),
+        "status": status_value,
+        "operationStatus": operation_status,
+    }
+
+
+def recalculate_operation_status(operation_id: str, conn: Any) -> str:
+    runs = list_operation_runs(operation_id, conn=conn)
+    statuses = [str(run.get("status") or "") for run in runs]
+    if not statuses:
+        update_operation_status(operation_id, "failed", conn)
+        return "failed"
+
+    if all(status == "cancelled" for status in statuses):
+        update_operation_status(operation_id, "cancelled", conn)
+        return "cancelled"
+
+    if any(status in {"queued", "running"} for status in statuses):
+        update_operation_status(operation_id, "running", conn)
+        return "running"
+
+    succeeded = statuses.count("succeeded")
+    failed = statuses.count("failed")
+    cancelled = statuses.count("cancelled")
+
+    if failed == 0 and cancelled == 0 and succeeded == len(statuses):
+        update_operation_status(operation_id, "succeeded", conn)
+        return "succeeded"
+    if succeeded == 0 and cancelled == 0 and failed == len(statuses):
+        update_operation_status(operation_id, "failed", conn)
+        return "failed"
+    if succeeded == 0 and failed == 0 and cancelled == len(statuses):
+        update_operation_status(operation_id, "cancelled", conn)
+        return "cancelled"
+
+    update_operation_status(operation_id, "partial", conn)
+    return "partial"
+
+
+def cancel_operation(operation_id: str, conn: Any) -> bool:
+    operation = conn.execute("SELECT id FROM operations WHERE id = ?", (operation_id,)).fetchone()
+    if not operation:
+        return False
+
+    now_ms = int(time.time() * 1000)
+    conn.execute(
+        """
+        UPDATE operation_runs
+        SET status = 'cancelled', finished_at = ?, output = COALESCE(output, 'cancelled'), exit_code = COALESCE(exit_code, 130)
+        WHERE operation_id = ? AND status IN ('queued', 'running')
+        """,
+        (now_ms, operation_id),
+    )
+    update_operation_status(operation_id, "cancelled", conn)
+    conn.commit()
+    return True
+
+
+def retry_operation(operation_id: str, initiator: str, conn: Any) -> Dict[str, Any]:
+    row = conn.execute("SELECT * FROM operations WHERE id = ?", (operation_id,)).fetchone()
+    if not row:
+        raise ValueError("operation not found")
+
+    base = _row_to_operation(row)
+    runs = list_operation_runs(operation_id, conn=conn)
+    retry_targets = [
+        str(run.get("nodeId"))
+        for run in runs
+        if str(run.get("status") or "") in {"failed", "cancelled"} and run.get("nodeId")
+    ]
+    if not retry_targets:
+        raise ValueError("no failed or cancelled runs to retry")
+
+    return create_operation(
+        action_type=str(base.get("actionType") or ""),
+        targets=retry_targets,
+        parameters=base.get("parameters") if isinstance(base.get("parameters"), dict) else None,
+        initiator=initiator,
+        approval_state="none",
+        mode=str(base.get("mode") or get_run_mode()),
+        conn=conn,
+    )
+
+
 def delete_operation(operation_id: str, conn: Optional[Any] = None) -> bool:
     close_conn = False
     if conn is None:
@@ -320,3 +582,14 @@ def _next_id(prefix: str) -> str:
     with _OP_ID_LOCK:
         _OP_COUNTER += 1
         return f"{prefix}-{int(time.time() * 1000)}-{_OP_COUNTER}"
+
+
+def _row_get(row: Any, key: str, default: Any = None) -> Any:
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except Exception:
+        return default

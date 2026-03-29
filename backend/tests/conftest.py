@@ -18,6 +18,7 @@ from app.web.routes import bp as api_bp
 def isolated_db(tmp_path, monkeypatch):
     db_path = tmp_path / "test.sqlite3"
     monkeypatch.setenv("SENTRA_DB_PATH", str(db_path))
+    monkeypatch.setenv("SENTRA_SIM_ENABLED", "true")
     yield db_path
 
 

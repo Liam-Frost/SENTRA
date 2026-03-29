@@ -6,15 +6,22 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 
 from app.persistence import db
 
-ALLOWED_EVENT_TYPES = {"fault", "incident", "action", "ai", "autonomy", "reset"}
-ALLOWED_FAULT_TYPES = {"overheat", "hardware_fail", "network_spike"}
-ALLOWED_ACTIONS = {
-    "reroute",
-    "throttle",
-    "enableCooling",
-    "disableCooling",
-    "restart",
+ALLOWED_EVENT_TYPES = {
+    "fault",
+    "incident",
+    "action",
+    "ai",
+    "autonomy",
+    "reset",
+    "policy",
+    "agent",
+    "node",
+    "operation",
+    "load_balancer",
+    "project",
 }
+ALLOWED_FAULT_TYPES = {"overheat", "hardware_fail", "network_spike"}
+ALLOWED_ACTIONS: Set[str] = set()
 ALLOWED_INCIDENT_METRICS = {"temp", "error_rate", "health", "load"}
 
 
@@ -33,24 +40,33 @@ def append_event(
     if not isinstance(message, str):
         raise ValueError("message must be str")
 
-    _validate_payload(event_type, payload)
-
     close_conn = False
     if conn is None:
         conn = db.connect()
         close_conn = True
     db.init_db(conn)
 
+    _validate_payload(event_type, payload)
+
     timestamp = ts or _iso_now()
     payload_json = json.dumps(payload, ensure_ascii=True)
-    cursor = conn.execute(
-        "INSERT INTO events (tick, ts, type, message, payload) VALUES (?, ?, ?, ?, ?)",
-        (tick, timestamp, event_type, message, payload_json),
-    )
+    if db.is_postgres(conn):
+        cursor = conn.execute(
+            "INSERT INTO events (tick, ts, type, message, payload) VALUES (?, ?, ?, ?, ?) RETURNING id",
+            (tick, timestamp, event_type, message, payload_json),
+        )
+        row = cursor.fetchone() or {}
+        event_id = int(row.get("id", 0)) if isinstance(row, dict) else int(row[0])
+    else:
+        cursor = conn.execute(
+            "INSERT INTO events (tick, ts, type, message, payload) VALUES (?, ?, ?, ?, ?)",
+            (tick, timestamp, event_type, message, payload_json),
+        )
+        event_id = int(cursor.lastrowid or 0)
     conn.commit()
 
     event = {
-        "id": cursor.lastrowid,
+        "id": event_id,
         "tick": tick,
         "ts": timestamp,
         "type": event_type,
@@ -202,10 +218,29 @@ def _validate_payload(event_type: str, payload: Dict[str, Any]) -> None:
     if event_type == "action":
         _require_keys(payload, {"action"})
         action = payload.get("action")
-        if action not in ALLOWED_ACTIONS:
-            raise ValueError(f"invalid action: {action}")
+        if not isinstance(action, str) or not action.strip():
+            raise ValueError("payload.action must be str")
         if "target" in payload:
             _require_str(payload, "target")
+        return
+
+    if event_type == "policy":
+        _require_keys(
+            payload,
+            {"policy_id", "policy_name", "policy_version", "mode", "target", "decision"},
+        )
+        _require_str(payload, "policy_id")
+        _require_str(payload, "policy_name")
+        if not isinstance(payload.get("policy_version"), int):
+            raise ValueError("payload.policy_version must be int")
+        _require_str(payload, "mode")
+        _require_str(payload, "target")
+        _require_str(payload, "decision")
+        # Optional fields
+        if "actions" in payload and not isinstance(payload.get("actions"), list):
+            raise ValueError("payload.actions must be list")
+        if "reasons" in payload and not isinstance(payload.get("reasons"), list):
+            raise ValueError("payload.reasons must be list")
         return
 
     if event_type == "ai":
@@ -227,6 +262,9 @@ def _validate_payload(event_type: str, payload: Dict[str, Any]) -> None:
         _require_keys(payload, {"reset_events"})
         if not isinstance(payload.get("reset_events"), bool):
             raise ValueError("reset.reset_events must be bool")
+        return
+
+    if event_type in {"agent", "node", "operation", "load_balancer", "project"}:
         return
 
 

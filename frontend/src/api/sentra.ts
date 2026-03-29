@@ -28,6 +28,12 @@ export type RealtimeState = {
   hz: number;
 };
 
+export type Capabilities = {
+  simulation_enabled: boolean;
+  database_backend?: string;
+  run_mode?: string;
+};
+
 type RealtimeRequest = {
   enabled: boolean;
   hz?: number;
@@ -35,6 +41,10 @@ type RealtimeRequest = {
 
 export async function getState(): Promise<WorldState> {
   return request<WorldState>("/api/state");
+}
+
+export async function getCapabilities(): Promise<Capabilities> {
+  return request<Capabilities>("/api/capabilities");
 }
 
 export async function tick(steps?: number): Promise<WorldState> {

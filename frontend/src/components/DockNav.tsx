@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
 import ThemeToggle, { type ThemeMode } from "./ThemeToggle";
 
-export type RouteKey = "dashboard" | "fleet" | "events";
+export type RouteKey =
+  | "dashboard"
+  | "fleet"
+  | "incidents"
+  | "projects"
+  | "policies"
+  | "operations"
+  | "events";
 
 type DockNavProps = {
   active: RouteKey;
   onNavigate: (route: RouteKey) => void;
   toolsOpen: boolean;
   onToggleTools: () => void;
+  simulationEnabled: boolean;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
 };
@@ -23,20 +31,58 @@ const items: { key: RouteKey; label: string; icon: JSX.Element }[] = [
     )
   },
   {
-    key: "events",
-    label: "Event timeline",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 4v16M6 8h10M6 12h10M6 16h10M18 12l2 2 3-3" />
-      </svg>
-    )
-  },
-  {
     key: "fleet",
     label: "Server fleet",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 4h16v6H4V4zm0 10h16v6H4v-6zm3-7h3v2H7V7zm0 10h3v2H7v-2z" />
+      </svg>
+    )
+  },
+  {
+    key: "incidents",
+    label: "Incidents",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 9v4M12 17h.01M10.3 4.6l-7.3 13A2 2 0 0 0 4.7 21h14.6a2 2 0 0 0 1.7-3.4l-7.3-13a2 2 0 0 0-3.4 0z" />
+      </svg>
+    )
+  },
+  {
+    key: "projects",
+    label: "Projects",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h8v10H4zM12 10h8v7h-8z" />
+      </svg>
+    )
+  },
+  {
+    key: "policies",
+    label: "Policies",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 6h16M7 6v12M17 18V6M4 18h16" />
+        <path d="M10 10h6M10 14h6" />
+      </svg>
+    )
+  },
+  {
+    key: "operations",
+    label: "Operations",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 6h16v12H4z" />
+        <path d="M8 10l2 2-2 2M12 14h4" />
+      </svg>
+    )
+  },
+  {
+    key: "events",
+    label: "Event timeline",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 4v16M6 8h10M6 12h10M6 16h10M18 12l2 2 3-3" />
       </svg>
     )
   }
@@ -63,9 +109,14 @@ export default function DockNav({
   onNavigate,
   toolsOpen,
   onToggleTools,
+  simulationEnabled,
   themeMode,
   onThemeModeChange
 }: DockNavProps) {
+  const visibleItems = simulationEnabled
+    ? items
+    : items;
+
   const [time, setTime] = useState(() => formatTime(new Date()));
 
   useEffect(() => {
@@ -78,7 +129,7 @@ export default function DockNav({
   return (
     <nav className="dock" aria-label="Primary">
       <div className="dock-items">
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <button
             key={item.key}
             type="button"
@@ -94,18 +145,20 @@ export default function DockNav({
           </button>
         ))}
 
-        <button
-          type="button"
-          className={`dock-item ${toolsOpen ? "active" : ""}`}
-          onClick={onToggleTools}
-          aria-label={toolsOpen ? "Close tools" : "Open tools"}
-          aria-pressed={toolsOpen}
-        >
-          <span className="dock-icon" aria-hidden="true">
-            {toolsIcon}
-          </span>
-          <span className="dock-label">{toolsOpen ? "Close tools" : "Open tools"}</span>
-        </button>
+        {simulationEnabled ? (
+          <button
+            type="button"
+            className={`dock-item ${toolsOpen ? "active" : ""}`}
+            onClick={onToggleTools}
+            aria-label={toolsOpen ? "Close tools" : "Open tools"}
+            aria-pressed={toolsOpen}
+          >
+            <span className="dock-icon" aria-hidden="true">
+              {toolsIcon}
+            </span>
+            <span className="dock-label">{toolsOpen ? "Close tools" : "Open tools"}</span>
+          </button>
+        ) : null}
 
         <ThemeToggle mode={themeMode} onModeChange={onThemeModeChange} />
       </div>

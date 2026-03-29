@@ -10,6 +10,7 @@ type TopBarProps = {
   tick: number;
   incidentCount: number;
   autonomyEnabled: boolean;
+  simulationEnabled: boolean;
   lastUpdated: Date | null;
   themeMode: ThemeMode;
 };
@@ -18,10 +19,10 @@ const routeLabels: Record<RouteKey, string> = {
   dashboard: "Dashboard",
   fleet: "Fleet",
   incidents: "Incidents",
+  projects: "Projects",
   policies: "Policies",
   operations: "Operations",
-  actions: "Actions",
-  nodes: "Node"
+  events: "Timeline"
 };
 
 export default function TopBar({
@@ -31,6 +32,7 @@ export default function TopBar({
   tick,
   incidentCount,
   autonomyEnabled,
+  simulationEnabled,
   lastUpdated
 }: TopBarProps) {
   const pageLabel = useMemo(() => routeLabels[route] ?? "Dashboard", [route]);
@@ -46,11 +48,11 @@ export default function TopBar({
         </div>
 
         <div className="topbar-chips" aria-label="Status summary">
-          <div className="status-chip">Tick {tick}</div>
           <div className="status-chip">Incidents {incidentCount}</div>
-          <div className="status-chip">
-            Autonomy {autonomyEnabled ? "Enabled" : "Standby"}
-          </div>
+          {simulationEnabled ? <div className="status-chip">Tick {tick}</div> : null}
+          {simulationEnabled ? (
+            <div className="status-chip">Autonomy {autonomyEnabled ? "Enabled" : "Standby"}</div>
+          ) : null}
         </div>
       </div>
 

@@ -6,7 +6,8 @@ from typing import Dict, Optional
 
 from app.core.simulator.faults import VALID_FAULTS
 from app.core.simulator.world import SERVER_IDS, World
-from app.services import autonomy_service, event_service
+from app.persistence import db
+from app.services import autonomy_service, event_service, operation_executor, policy_engine
 
 _WORLD: Optional[World] = None
 _WORLD_LOCK = threading.RLock()
@@ -34,12 +35,25 @@ def get_tick() -> int:
 def advance(steps: int = 1) -> Dict[str, object]:
     with _WORLD_LOCK:
         world = _ensure_world()
-        for _ in range(int(steps)):
-            world.tick(1)
-            state = world.get_state()
-            autonomy_service.on_tick(state, execute_action_fn=_execute_action)
-        world.set_autonomy(autonomy_service.is_autonomy_enabled())
-        return world.get_state()
+        conn = db.connect()
+        try:
+            db.init_db(conn)
+            for _ in range(int(steps)):
+                world.tick(1)
+                state = world.get_state()
+                # Policies run regardless of autonomy; AUTO_EXECUTE is gated inside policy_engine.
+                policy_engine.on_tick(state, conn=conn)
+                # Execute any queued operations created by policies or API calls.
+                state = operation_executor.process_pending(
+                    state, execute_action_fn=_execute_action, conn=conn
+                )
+                # Existing incident-driven autonomy.
+                autonomy_service.on_tick(state, execute_action_fn=_execute_action, conn=conn)
+
+            world.set_autonomy(autonomy_service.is_autonomy_enabled())
+            return world.get_state()
+        finally:
+            conn.close()
 
 
 def inject_fault(fault_type: str, target: str) -> None:

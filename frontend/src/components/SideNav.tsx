@@ -6,6 +6,7 @@ type SideNavProps = {
   onNavigate: (route: RouteKey) => void;
   toolsOpen: boolean;
   onToggleTools: () => void;
+  simulationEnabled: boolean;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
 };
@@ -39,6 +40,15 @@ const items: { key: RouteKey; label: string; icon: JSX.Element }[] = [
     )
   },
   {
+    key: "projects",
+    label: "Projects",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h8v10H4zM12 10h8v7h-8z" />
+      </svg>
+    )
+  },
+  {
     key: "policies",
     label: "Policies",
     icon: (
@@ -57,15 +67,6 @@ const items: { key: RouteKey; label: string; icon: JSX.Element }[] = [
         <path d="M8 10l2 2-2 2M12 14h4" />
       </svg>
     )
-  },
-  {
-    key: "actions",
-    label: "Actions",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-      </svg>
-    )
   }
 ];
 
@@ -80,13 +81,18 @@ export default function SideNav({
   onNavigate,
   toolsOpen,
   onToggleTools,
+  simulationEnabled,
   themeMode,
   onThemeModeChange
 }: SideNavProps) {
+  const visibleItems = simulationEnabled
+    ? items
+    : items;
+
   return (
     <nav className="side-nav" aria-label="Primary">
       <div className="side-nav-items">
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <button
             key={item.key}
             type="button"
@@ -106,18 +112,20 @@ export default function SideNav({
       <div className="side-nav-divider" role="presentation" />
 
       <div className="side-nav-items">
-        <button
-          type="button"
-          className={`dock-item ${toolsOpen ? "active" : ""}`}
-          onClick={onToggleTools}
-          aria-label={toolsOpen ? "Close tools" : "Open tools"}
-          aria-pressed={toolsOpen}
-        >
-          <span className="dock-icon" aria-hidden="true">
-            {toolsIcon}
-          </span>
-          <span className="dock-label">{toolsOpen ? "Close tools" : "Open tools"}</span>
-        </button>
+        {simulationEnabled ? (
+          <button
+            type="button"
+            className={`dock-item ${toolsOpen ? "active" : ""}`}
+            onClick={onToggleTools}
+            aria-label={toolsOpen ? "Close tools" : "Open tools"}
+            aria-pressed={toolsOpen}
+          >
+            <span className="dock-icon" aria-hidden="true">
+              {toolsIcon}
+            </span>
+            <span className="dock-label">{toolsOpen ? "Close tools" : "Open tools"}</span>
+          </button>
+        ) : null}
 
         <ThemeToggle mode={themeMode} onModeChange={onThemeModeChange} />
       </div>

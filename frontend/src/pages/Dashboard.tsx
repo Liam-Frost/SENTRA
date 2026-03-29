@@ -11,13 +11,54 @@ type DashboardProps = {
   state: WorldState;
   events: EventRecord[];
   incidentCount: number;
+  simulationEnabled?: boolean;
+  lastUpdated?: Date | null;
   onOpenEvents: (eventId?: number) => void;
 };
+
+function formatElapsedDuration(totalMinutes: number) {
+  const clamped = Math.max(0, Math.floor(totalMinutes));
+  const minute = 1;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const month = 30 * day;
+  const year = 365 * day;
+
+  let remaining = clamped;
+  const years = Math.floor(remaining / year);
+  remaining -= years * year;
+  const months = Math.floor(remaining / month);
+  remaining -= months * month;
+  const days = Math.floor(remaining / day);
+  remaining -= days * day;
+  const hours = Math.floor(remaining / hour);
+  remaining -= hours * hour;
+  const minutes = Math.floor(remaining / minute);
+
+  const parts = [
+    years > 0 ? `${years}y` : null,
+    months > 0 ? `${months}mo` : null,
+    days > 0 ? `${days}d` : null,
+    hours > 0 ? `${hours}h` : null,
+    minutes > 0 ? `${minutes}m` : null
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" ") : "<1m";
+}
+
+function formatDateTime(value: string | number | Date | null | undefined) {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
 
 export default function Dashboard({
   state,
   events,
   incidentCount,
+  simulationEnabled = false,
+  lastUpdated = null,
   onOpenEvents
 }: DashboardProps) {
   const stats = getFleetStats(state);
@@ -32,11 +73,32 @@ export default function Dashboard({
     health: server.health
   }));
 
-  const incidentTicks = events
-    .filter((event) => event.type === "incident")
-    .map((event) => event.tick);
-  const lastIncidentTick = incidentTicks.length > 0 ? Math.max(...incidentTicks) : null;
-  const stableTicks = lastIncidentTick === null ? state.tick : Math.max(0, state.tick - lastIncidentTick);
+  const incidentEvents = events.filter((event) => event.type === "incident");
+  const lastIncidentEvent =
+    incidentEvents.length > 0
+      ? incidentEvents.reduce((latest, event) =>
+          new Date(event.ts).getTime() > new Date(latest.ts).getTime() ? event : latest
+        )
+      : null;
+  const firstSeenEvent =
+    events.length > 0
+      ? events.reduce((earliest, event) =>
+          new Date(event.ts).getTime() < new Date(earliest.ts).getTime() ? event : earliest
+        )
+      : null;
+  const nowMs = lastUpdated?.getTime() ?? Date.now();
+  const stableDurationMinutes = Math.max(
+    0,
+    Math.floor(
+      (nowMs -
+        (lastIncidentEvent
+          ? new Date(lastIncidentEvent.ts).getTime()
+          : firstSeenEvent
+            ? new Date(firstSeenEvent.ts).getTime()
+            : nowMs)) /
+        60000
+    )
+  );
 
   const maxTempEntry = serverEntries.length > 0
     ? serverEntries.reduce(
@@ -58,11 +120,11 @@ export default function Dashboard({
           </p>
         </div>
         <div className="page-status">
-          <div className="status-chip">
-            Autonomy {state.autonomy_enabled ? "Enabled" : "Standby"}
-          </div>
+          {simulationEnabled ? (
+            <div className="status-chip">Autonomy {state.autonomy_enabled ? "Enabled" : "Standby"}</div>
+          ) : null}
           <div className="status-chip">Incidents {incidentCount}</div>
-          <div className="status-chip">Cooling {stats.coolingCount}/3</div>
+          <div className="status-chip">Cooling {stats.coolingCount}/{stats.serverCount || 0}</div>
         </div>
       </div>
 
@@ -74,8 +136,8 @@ export default function Dashboard({
           </div>
           <div className="stat-sub">Requests / second</div>
           <div className="stat-row">
-            <span>System tick</span>
-            <NumberTicker value={state.tick} className="stat-inline" />
+            <span>Snapshot time</span>
+            <span className="stat-inline">{formatDateTime(lastUpdated)}</span>
           </div>
         </div>
 
@@ -86,7 +148,6 @@ export default function Dashboard({
               value={stats.avgLoad}
               max={100}
               label="Avg load"
-              unit="%"
               size={140}
               strokeWidth={12}
             />
@@ -94,7 +155,6 @@ export default function Dashboard({
               value={stats.avgTemp}
               max={100}
               label="Avg temp"
-              unit="C"
               size={140}
               strokeWidth={12}
             />
@@ -102,7 +162,6 @@ export default function Dashboard({
               value={stats.avgHealth}
               max={100}
               label="Avg health"
-              unit="%"
               size={140}
               strokeWidth={12}
             />
@@ -111,20 +170,13 @@ export default function Dashboard({
 
         <div className="card stat-card span-2x1">
           <div className="card-title">Stability window</div>
-          <div className="stat-value">
-            <NumberTicker value={stableTicks} />
-            <span className="stat-unit">ticks</span>
-          </div>
+          <div className="stat-value stat-value-text">{formatElapsedDuration(stableDurationMinutes)}</div>
           <div className="stat-sub">
-            {lastIncidentTick === null
-              ? "No incidents detected yet"
-              : "Ticks since last incident"}
+            {lastIncidentEvent === null ? "Since monitoring began" : "Time since last incident"}
           </div>
           <div className="stat-row">
-            <span>Last incident tick</span>
-            <span className="stat-inline">
-              {lastIncidentTick === null ? "-" : lastIncidentTick}
-            </span>
+            <span>Last incident time</span>
+            <span className="stat-inline">{formatDateTime(lastIncidentEvent?.ts)}</span>
           </div>
         </div>
 
@@ -196,15 +248,12 @@ export default function Dashboard({
               value={stats.totalPower}
               format={(val) => formatNumber(val, 0)}
             />
-            <span className="stat-unit">W</span>
           </div>
           <div className="stat-sub">Total rack consumption</div>
           <div className="stat-row">
             <span>Avg power / node</span>
             <span className="stat-inline">
-              {stats.serverCount > 0
-                ? `${formatNumber(stats.totalPower / stats.serverCount, 0)} W`
-                : "-"}
+              {stats.serverCount > 0 ? formatNumber(stats.totalPower / stats.serverCount, 0) : "-"}
             </span>
           </div>
         </div>

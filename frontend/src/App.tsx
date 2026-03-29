@@ -2,12 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DockNav, { type RouteKey } from "./components/DockNav";
 import ControlDrawer from "./components/ControlDrawer";
 import NotificationTray, { type NotificationItem } from "./components/NotificationTray";
+import SideNav from "./components/SideNav";
+import TopBar from "./components/TopBar";
 import type { ServerState, WorldState } from "./types";
 import { useSentra } from "./state/useSentra";
 import Dashboard from "./pages/Dashboard";
 import ServerFleet from "./pages/ServerFleet";
 import EventTimeline from "./pages/EventTimeline";
-import { isIncident } from "./utils/metrics";
+import IncidentsPage from "./pages/Incidents";
+import PoliciesPage from "./pages/Policies";
+import OperationsPage from "./pages/Operations";
+import ProjectsPage from "./pages/Projects";
 import type { ThemeMode } from "./components/ThemeToggle";
 
 const THEME_STORAGE_KEY = "sentra-theme-mode";
@@ -35,29 +40,87 @@ const fallbackState: WorldState = {
   }
 };
 
-const routes: RouteKey[] = ["dashboard", "fleet", "events"];
+const simulationRoutes: RouteKey[] = [
+  "dashboard",
+  "fleet",
+  "incidents",
+  "projects",
+  "policies",
+  "operations",
+  "events"
+];
 
-function parseRoute(): RouteKey {
+const nonSimulationRoutes: RouteKey[] = [
+  "dashboard",
+  "fleet",
+  "incidents",
+  "projects",
+  "operations",
+  "policies",
+  "events"
+];
+
+function parseRoute(allowedRoutes: RouteKey[], fallbackRoute: RouteKey): RouteKey {
   const raw = window.location.hash.replace("#/", "").replace("#", "");
   const routeKey = raw.split("?")[0];
-  if (routes.includes(routeKey as RouteKey)) return routeKey as RouteKey;
-  return "dashboard";
+  if (allowedRoutes.includes(routeKey as RouteKey)) return routeKey as RouteKey;
+  return fallbackRoute;
 }
 
-function useHashRoute() {
-  const [route, setRoute] = useState<RouteKey>(() => parseRoute());
+function useHashRoute(allowedRoutes: RouteKey[], fallbackRoute: RouteKey) {
+  const [route, setRoute] = useState<RouteKey>(() => parseRoute(allowedRoutes, fallbackRoute));
 
   useEffect(() => {
-    const handler = () => setRoute(parseRoute());
+    const handler = () => setRoute(parseRoute(allowedRoutes, fallbackRoute));
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
-  }, []);
+  }, [allowedRoutes, fallbackRoute]);
+
+  useEffect(() => {
+    const next = parseRoute(allowedRoutes, fallbackRoute);
+    if (next !== route) {
+      setRoute(next);
+    }
+  }, [allowedRoutes, fallbackRoute, route]);
 
   const navigate = (next: RouteKey) => {
+    if (!allowedRoutes.includes(next)) {
+      window.location.hash = `/${fallbackRoute}`;
+      return;
+    }
     window.location.hash = `/${next}`;
   };
 
   return { route, navigate };
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const handler = () => setMatches(media.matches);
+    handler();
+
+    if (media.addEventListener) {
+      media.addEventListener("change", handler);
+    } else {
+      media.addListener(handler);
+    }
+
+    return () => {
+      if (media.removeEventListener) {
+        media.removeEventListener("change", handler);
+      } else {
+        media.removeListener(handler);
+      }
+    };
+  }, [query]);
+
+  return matches;
 }
 
 function getSystemTheme() {
@@ -72,6 +135,8 @@ function applyTheme(mode: ThemeMode) {
 
 export default function App() {
   const {
+    simulationEnabled,
+    capabilitiesLoading,
     state,
     events,
     loading,
@@ -86,13 +151,20 @@ export default function App() {
     setRealtime
   } = useSentra();
 
+  const visibleRoutes = useMemo(
+    () => (simulationEnabled ? simulationRoutes : nonSimulationRoutes),
+    [simulationEnabled]
+  );
+  const fallbackRoute: RouteKey = "dashboard";
+
   const displayState = state ?? fallbackState;
   const incidentCount = useMemo(() => {
-    return Object.values(displayState.servers).filter(isIncident).length;
-  }, [displayState.servers]);
+    return events.filter((event) => event.type === "incident").length;
+  }, [events]);
 
-  const { route, navigate } = useHashRoute();
+  const { route, navigate } = useHashRoute(visibleRoutes, fallbackRoute);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const useSideNav = useMediaQuery("(min-width: 1280px)");
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
     return stored ?? "system";
@@ -104,12 +176,17 @@ export default function App() {
   const lastIncidentIdRef = useRef(0);
 
   useEffect(() => {
+    if (capabilitiesLoading) return;
     if (!window.location.hash) {
-      window.location.hash = "/dashboard";
+      window.location.hash = `/${fallbackRoute}`;
     }
-  }, []);
+  }, [capabilitiesLoading, fallbackRoute]);
 
   useEffect(() => {
+    if (!simulationEnabled) {
+      setToolsOpen(false);
+      return;
+    }
     const handleControlRoute = () => {
       const raw = window.location.hash.replace("#/", "").replace("#", "");
       const base = raw.split("?")[0];
@@ -121,7 +198,7 @@ export default function App() {
     handleControlRoute();
     window.addEventListener("hashchange", handleControlRoute);
     return () => window.removeEventListener("hashchange", handleControlRoute);
-  }, []);
+  }, [simulationEnabled]);
 
   useEffect(() => {
     applyTheme(themeMode);
@@ -172,7 +249,6 @@ export default function App() {
       .map((event) => ({
         id: event.id,
         message: event.message,
-        tick: event.tick,
         ts: event.ts,
         expiresAt: now + NOTIFICATION_TTL
       }));
@@ -191,7 +267,8 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, []);
 
-  const connectionLabel = loading ? "Connecting" : error ? "Degraded" : "Live";
+  const connectionLabel =
+    capabilitiesLoading || loading ? "Connecting" : error ? "Degraded" : "Live";
   const handleReset = async (resetEvents: boolean) => {
     await reset(resetEvents);
     setNotifications([]);
@@ -205,83 +282,93 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="top-bar">
-        <div className="title-block">
-          <div className="eyebrow">SENTRA</div>
-          <h1>Autonomous Data Center Console</h1>
-          <p>
-            Monitor, diagnose, and verify autonomous responses across the simulated
-            micro data center.
-          </p>
-        </div>
-        <div className="status-panel">
-          <div className="status-pill">
-            <span className={`dot ${error ? "dot-warn" : "dot-ok"}`} />
-            <span>{connectionLabel}</span>
-          </div>
-          <div className="status-stack">
-            <div className="status-item">
-              <span>Tick</span>
-              <strong>{displayState.tick}</strong>
-            </div>
-            <div className="status-item">
-              <span>Incidents</span>
-              <strong>{incidentCount}</strong>
-            </div>
-            <div className="status-item">
-              <span>Last update</span>
-              <strong>{lastUpdated ? lastUpdated.toLocaleTimeString() : "-"}</strong>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {error && (
-        <div className="alert">
-          <strong>API issue:</strong> {error}
-        </div>
-      )}
-
-      <main className="main-content">
-        {route === "dashboard" && (
-          <Dashboard
-            state={displayState}
-            events={events}
-            incidentCount={incidentCount}
-            onOpenEvents={(eventId) => {
-              if (eventId) {
-                window.location.hash = `/events?event=${eventId}`;
-                return;
-              }
-              navigate("events");
-            }}
+      <div className={`app-layout ${useSideNav ? "has-side-nav" : ""}`.trim()}>
+        {useSideNav ? (
+          <SideNav
+            active={route}
+            onNavigate={navigate}
+            toolsOpen={toolsOpen}
+            onToggleTools={() => setToolsOpen((current) => !current)}
+            simulationEnabled={simulationEnabled}
+            themeMode={themeMode}
+            onThemeModeChange={setThemeMode}
           />
-        )}
-        {route === "fleet" && <ServerFleet state={displayState} />}
-        {route === "events" && <EventTimeline events={events} />}
-      </main>
+        ) : null}
 
-      <ControlDrawer
-        open={toolsOpen}
-        onClose={() => setToolsOpen(false)}
-        state={displayState}
-        busy={busy}
-        realtime={realtime}
-        onAdvanceTick={advanceTick}
-        onToggleAutonomy={toggleAutonomy}
-        onInjectFault={injectFault}
-        onReset={handleReset}
-        onSetRealtime={setRealtime}
-      />
+        <div className="app-body">
+          <TopBar
+            route={route}
+            connectionLabel={connectionLabel}
+            hasError={Boolean(error)}
+            tick={displayState.tick}
+            incidentCount={incidentCount}
+            autonomyEnabled={displayState.autonomy_enabled}
+            simulationEnabled={simulationEnabled}
+            lastUpdated={lastUpdated}
+            themeMode={themeMode}
+          />
 
-      <DockNav
-        active={route}
-        onNavigate={navigate}
-        toolsOpen={toolsOpen}
-        onToggleTools={() => setToolsOpen((current) => !current)}
-        themeMode={themeMode}
-        onThemeModeChange={setThemeMode}
-      />
+          {error && (
+            <div className="alert">
+              <strong>API issue:</strong> {error}
+            </div>
+          )}
+
+          <main className="main-content">
+            {route === "dashboard" && (
+                <Dashboard
+                  state={displayState}
+                  events={events}
+                  incidentCount={incidentCount}
+                  simulationEnabled={simulationEnabled}
+                  lastUpdated={lastUpdated}
+                  onOpenEvents={(eventId) => {
+                  if (eventId) {
+                    window.location.hash = `/events?event=${eventId}`;
+                    return;
+                  }
+                  navigate("events");
+                }}
+              />
+            )}
+            {route === "fleet" && <ServerFleet state={displayState} />}
+            {route === "incidents" && (
+              <IncidentsPage state={displayState} events={events} />
+            )}
+            {route === "projects" && <ProjectsPage />}
+            {route === "policies" && <PoliciesPage />}
+            {route === "operations" && <OperationsPage />}
+            {route === "events" && <EventTimeline events={events} />}
+          </main>
+        </div>
+      </div>
+
+      {simulationEnabled ? (
+        <ControlDrawer
+          open={toolsOpen}
+          onClose={() => setToolsOpen(false)}
+          state={displayState}
+          busy={busy}
+          realtime={realtime}
+          onAdvanceTick={advanceTick}
+          onToggleAutonomy={toggleAutonomy}
+          onInjectFault={injectFault}
+          onReset={handleReset}
+          onSetRealtime={setRealtime}
+        />
+      ) : null}
+
+      {useSideNav ? null : (
+        <DockNav
+          active={route}
+          onNavigate={navigate}
+          toolsOpen={toolsOpen}
+          onToggleTools={() => setToolsOpen((current) => !current)}
+          simulationEnabled={simulationEnabled}
+          themeMode={themeMode}
+          onThemeModeChange={setThemeMode}
+        />
+      )}
 
       <NotificationTray
         items={notifications}

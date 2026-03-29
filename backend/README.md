@@ -70,16 +70,20 @@ curl -s -X POST http://localhost:5000/api/realtime \
 
 ## Persistence
 
-Events are stored in SQLite.
+Operational data is stored in PostgreSQL when `SENTRA_DATABASE_URL` is set.
+SQLite remains available as a local fallback.
 
-- `SENTRA_DB_PATH` (optional): explicit DB path
-- default: `data/dev.sqlite3` (created on demand)
+- `SENTRA_DATABASE_URL` (optional): PostgreSQL connection string
+- `SENTRA_DB_PATH` (optional): explicit SQLite path
+- default SQLite path: `data/dev.sqlite3` (created on demand)
 
 ## Environment variables
 
 - `SENTRA_SIM_SEED` (optional): deterministic simulation seed (default: `7`)
-- `SENTRA_DB_PATH` (optional): SQLite DB path
+- `SENTRA_DATABASE_URL` (optional): PostgreSQL connection string (preferred)
+- `SENTRA_DB_PATH` (optional): SQLite DB path fallback when `SENTRA_DATABASE_URL` is not set
 - `SENTRA_AI_API_URL` / `SENTRA_AI_API_KEY` / `SENTRA_AI_MODEL` (optional): AI explanations
+- `SENTRA_SIM_ENABLED` (optional): expose simulation endpoints when set to `true` (default: disabled)
 
 ## Tests
 

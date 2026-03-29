@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import EventCard from "./EventCard";
 import MetricBar from "./MetricBar";
-import type { EventRecord, ServerId, ServerState, WorldState } from "../types";
+import type { EventRecord, ServerId, WorldState } from "../types";
 import { formatPercent, formatPower, formatTemp } from "../utils/format";
 import {
   createOperation,
@@ -117,8 +117,8 @@ export default function NodeDrawer({
 
   const server = useMemo(() => {
     if (!nodeId) return null;
-    const servers = state.servers as Record<ServerId, ServerState>;
-    return (servers[nodeId] as ServerState | undefined) ?? null;
+    if (!(nodeId in state.servers)) return null;
+    return state.servers[nodeId as ServerId] ?? null;
   }, [nodeId, state.servers]);
 
   const { operations } = useOperationStore();

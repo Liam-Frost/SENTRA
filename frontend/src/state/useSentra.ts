@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EventRecord, FaultType, ServerId, WorldState } from "../types";
 import {
+  getCapabilities,
   getEvents,
   getRealtime,
   getState,
@@ -29,6 +30,8 @@ function useMountedRef() {
 }
 
 type UseSentraResult = {
+  simulationEnabled: boolean;
+  capabilitiesLoading: boolean;
   state: WorldState | null;
   events: EventRecord[];
   loading: boolean;
@@ -61,6 +64,8 @@ function mergeEvents(existing: EventRecord[], incoming: EventRecord[]) {
 
 export function useSentra(): UseSentraResult {
   const mounted = useMountedRef();
+  const [simulationEnabled, setSimulationEnabled] = useState(false);
+  const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
   const [state, setState] = useState<WorldState | null>(null);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const maxEventIdRef = useRef(0);
@@ -72,6 +77,30 @@ export function useSentra(): UseSentraResult {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadCapabilities = async () => {
+      try {
+        const data = await getCapabilities();
+        if (cancelled || !mounted.current) return;
+        setSimulationEnabled(Boolean(data.simulation_enabled));
+        setError(null);
+      } catch (err) {
+        if (cancelled || !mounted.current) return;
+        const message = err instanceof Error ? err.message : "Failed to load capabilities";
+        setError(message);
+      } finally {
+        if (cancelled || !mounted.current) return;
+        setCapabilitiesLoading(false);
+      }
+    };
+
+    loadCapabilities();
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted]);
 
   const refreshState = useCallback(async () => {
     try {
@@ -118,6 +147,11 @@ export function useSentra(): UseSentraResult {
   }, [refreshEvents]);
 
   const refreshRealtime = useCallback(async () => {
+    if (!simulationEnabled) {
+      if (!mounted.current) return;
+      setRealtimeState({ enabled: false, hz: 1 });
+      return;
+    }
     try {
       const data = await getRealtime();
       if (!mounted.current) return;
@@ -125,20 +159,39 @@ export function useSentra(): UseSentraResult {
     } catch {
       if (!mounted.current) return;
     }
-  }, [mounted]);
+  }, [mounted, simulationEnabled]);
 
   const refresh = useCallback(async () => {
-    await Promise.all([refreshState(), refreshEvents(), refreshRealtime()]);
-  }, [refreshEvents, refreshRealtime, refreshState]);
+    if (capabilitiesLoading) return;
+    setLoading(true);
+    try {
+      const jobs = [refreshEvents()];
+      jobs.push(refreshState());
+      if (simulationEnabled) jobs.push(refreshRealtime());
+      await Promise.all(jobs);
+    } finally {
+      if (!mounted.current) return;
+      setLoading(false);
+    }
+  }, [
+    capabilitiesLoading,
+    mounted,
+    refreshEvents,
+    refreshRealtime,
+    refreshState,
+    simulationEnabled
+  ]);
 
   useEffect(() => {
+    if (capabilitiesLoading) return;
     refresh();
-  }, [refresh]);
+  }, [capabilitiesLoading, refresh]);
 
   useEffect(() => {
+    if (!simulationEnabled) return;
     const interval = window.setInterval(refreshRealtime, REALTIME_POLL_MS);
     return () => window.clearInterval(interval);
-  }, [refreshRealtime]);
+  }, [refreshRealtime, simulationEnabled]);
 
   const runAction = useCallback(
     async (action: () => Promise<void>) => {
@@ -157,37 +210,53 @@ export function useSentra(): UseSentraResult {
 
   const advanceTick = useCallback(
     async (steps?: number) => {
+      if (!simulationEnabled) {
+        setError("Simulation controls are disabled.");
+        return;
+      }
       await runAction(async () => {
         const data = await tick(steps);
         setState(data);
         await refreshEvents();
       });
     },
-    [refreshEvents, runAction]
+    [refreshEvents, runAction, simulationEnabled]
   );
 
   const toggleAutonomy = useCallback(
     async (enabled: boolean) => {
+      if (!simulationEnabled) {
+        setError("Simulation controls are disabled.");
+        return;
+      }
       await runAction(async () => {
         await setAutonomy(enabled);
         await refresh();
       });
     },
-    [refresh, runAction]
+    [refresh, runAction, simulationEnabled]
   );
 
   const injectFaultAction = useCallback(
     async (type: FaultType, target: ServerId) => {
+      if (!simulationEnabled) {
+        setError("Simulation controls are disabled.");
+        return;
+      }
       await runAction(async () => {
         await injectFault({ type, target });
         await refresh();
       });
     },
-    [refresh, runAction]
+    [refresh, runAction, simulationEnabled]
   );
 
   const reset = useCallback(
     async (resetEvents: boolean) => {
+      if (!simulationEnabled) {
+        setError("Simulation controls are disabled.");
+        return;
+      }
       await runAction(async () => {
         const data = await resetWorld(resetEvents);
         setState(data);
@@ -199,21 +268,27 @@ export function useSentra(): UseSentraResult {
         await refreshEvents();
       });
     },
-    [refreshEvents, runAction]
+    [refreshEvents, runAction, simulationEnabled]
   );
 
   const setRealtimeMode = useCallback(
     async (enabled: boolean, hz?: number) => {
+      if (!simulationEnabled) {
+        setError("Simulation controls are disabled.");
+        return;
+      }
       await runAction(async () => {
         const data = await setRealtime(enabled, hz);
         setRealtimeState(data);
       });
     },
-    [runAction]
+    [runAction, simulationEnabled]
   );
 
   const result = useMemo(
     () => ({
+      simulationEnabled,
+      capabilitiesLoading,
       state,
       events,
       loading,
@@ -231,6 +306,7 @@ export function useSentra(): UseSentraResult {
     [
       advanceTick,
       busy,
+      capabilitiesLoading,
       error,
       events,
       injectFaultAction,
@@ -239,6 +315,7 @@ export function useSentra(): UseSentraResult {
       realtime,
       refresh,
       reset,
+      simulationEnabled,
       setRealtimeMode,
       state,
       toggleAutonomy
